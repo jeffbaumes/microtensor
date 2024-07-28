@@ -9,18 +9,16 @@ float randomMinusOneToOne() {
   return distr(eng);
 }
 
-Value::Value(float data) : data(data), grad(0), op('\0'), a_(nullptr), b_(nullptr) {}
-Value::Value(float data, char op, std::shared_ptr<Value> a)
-      : data(data), grad(0), op(op), a_(a), b_(nullptr) {}
-Value::Value(float data, char op, std::shared_ptr<Value> a, std::shared_ptr<Value> b)
-      : data(data), grad(0), op(op), a_(a), b_(b) {}
+Value::Value(float data) : data(data), grad(0) {}
 
 void Value::backward() {
   grad = 1.0f;
   auto sorted = std::vector<std::shared_ptr<Value>>();
   topological_sort(sorted);
   for (auto& node : sorted) {
-    node->backward_step();
+    if (node->backprop) {
+      node->backprop();
+    }
   }
 }
 
@@ -28,41 +26,14 @@ void Value::print_tree(int indent = 0) {
   for (int i = 0; i < indent; ++i) {
     std::cout << " ";
   }
-  std::cout << "data=" << std::fixed << std::setprecision(4) << data << "|grad=" << grad << "|op=" << op << std::endl;
-  if (a_) {
-    a_->print_tree(indent + 2);
-  }
-  if (b_) {
-    b_->print_tree(indent + 2);
+  std::cout << "data=" << data << "|grad=" << grad << std::endl;
+  for (auto& child: children) {
+    child->print_tree(indent + 2);
   }
 }
 
 void Value::print() {
-  std::cout << "data=" << std::fixed << std::setprecision(4) << data << "|grad=" << grad << "|op=" << op << std::endl;
-}
-
-void Value::backward_step() {
-  switch (op) {
-    case '\0':
-      return;
-    case '+':
-      a_->grad += grad;
-      b_->grad += grad;
-      break;
-    case '*':
-      a_->grad += grad * b_->data;
-      b_->grad += grad * a_->data;
-      break;
-    case 't':
-      a_->grad += grad * (1.0f - data * data);
-      break;
-    case 'e':
-      a_->grad += grad * data;
-      break;
-    case 'p':
-      a_->grad += grad * (b_->data * powf(a_->data, b_->data - 1.0f));
-      break;
-  }
+  std::cout << "data=" << data << "|grad=" << grad << std::endl;
 }
 
 void Value::topological_sort(std::vector<std::shared_ptr<Value>>& sorted) {
@@ -72,11 +43,8 @@ void Value::topological_sort(std::vector<std::shared_ptr<Value>>& sorted) {
       return;
     }
     visited.insert(node);
-    if (node->a_) {
-      dfs(node->a_);
-    }
-    if (node->b_) {
-      dfs(node->b_);
+    for (auto& child: node->children) {
+      dfs(child);
     }
     sorted.push_back(node);
   };
@@ -85,7 +53,13 @@ void Value::topological_sort(std::vector<std::shared_ptr<Value>>& sorted) {
 }
 
 std::shared_ptr<Value> operator+(const std::shared_ptr<Value>& a, const std::shared_ptr<Value>& b) {
-  return std::make_shared<Value>(a->data + b->data, '+', a, b);
+  auto result = std::make_shared<Value>(a->data + b->data);
+  result->children = {a, b};
+  result->backprop = [a, b, result]() {
+    a->grad += result->grad;
+    b->grad += result->grad;
+  };
+  return result;
 }
 
 std::shared_ptr<Value> operator+(const std::shared_ptr<Value>& a, float b) {
@@ -113,7 +87,13 @@ std::shared_ptr<Value> operator-(float a, const std::shared_ptr<Value>& b) {
 }
 
 std::shared_ptr<Value> operator*(const std::shared_ptr<Value>& a, const std::shared_ptr<Value>& b) {
-  return std::make_shared<Value>(a->data * b->data, '*', a, b);
+  auto result = std::make_shared<Value>(a->data * b->data);
+  result->children = {a, b};
+  result->backprop = [a, b, result]() {
+    a->grad += result->grad * b->data;
+    b->grad += result->grad * a->data;
+  };
+  return result;
 }
 
 std::shared_ptr<Value> operator*(const std::shared_ptr<Value>& a, float b) {
@@ -125,15 +105,30 @@ std::shared_ptr<Value> operator*(float a, const std::shared_ptr<Value>& b) {
 }
 
 std::shared_ptr<Value> tanhf(const std::shared_ptr<Value>& a) {
-  return std::make_shared<Value>(tanhf(a->data), 't', a);
+  auto result = std::make_shared<Value>(tanhf(a->data));
+  result->children = {a};
+  result->backprop = [a, result]() {
+    a->grad += result->grad * (1.0f - result->data * result->data);
+  };
+  return result;
 }
 
 std::shared_ptr<Value> expf(const std::shared_ptr<Value>& a) {
-  return std::make_shared<Value>(expf(a->data), 'e', a);
+  auto result = std::make_shared<Value>(expf(a->data));
+  result->children = {a};
+  result->backprop = [a, result]() {
+    a->grad += result->grad * result->data;
+  };
+  return result;
 }
 
 std::shared_ptr<Value> powf(const std::shared_ptr<Value>& a, float b) {
-  return std::make_shared<Value>(powf(a->data, b), 'p', a, std::make_shared<Value>(b));
+  auto result = std::make_shared<Value>(powf(a->data, b));
+  result->children = {a};
+  result->backprop = [a, b, result]() {
+    a->grad += result->grad * (b * powf(a->data, b - 1.0f));
+  };
+  return result;
 }
 
 std::shared_ptr<Value> operator/(const std::shared_ptr<Value>& a, const std::shared_ptr<Value>& b) {

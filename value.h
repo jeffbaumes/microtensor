@@ -15,20 +15,16 @@ class Value : public std::enable_shared_from_this<Value> {
  public:
   float data;
   float grad;
-  char op;
-  std::shared_ptr<Value> a_;
-  std::shared_ptr<Value> b_;
+  std::vector<std::shared_ptr<Value>> children;
+  std::function<void()> backprop;
 
   Value(float data);
-  Value(float data, char op, std::shared_ptr<Value> a);
-  Value(float data, char op, std::shared_ptr<Value> a, std::shared_ptr<Value> b);
 
   void backward();
   void print_tree(int indent);
   void print();
 
 private:
-  void backward_step();
   void topological_sort(std::vector<std::shared_ptr<Value>>& sorted);
 };
 
