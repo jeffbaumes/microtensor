@@ -1,7 +1,6 @@
 #include <cassert>
 #include <cmath>
 #include <functional>
-#include <initializer_list>
 #include <iostream>
 #include <memory>   // For std::shared_ptr
 #include <numeric>  // For std::accumulate
@@ -36,7 +35,7 @@ class Array : public std::enable_shared_from_this<Array> {
     const std::vector<float>& data,
     const std::vector<int>& shape
   ) : data(data), shape(shape) {
-    CalculateStrides(shape, strides);
+    calculate_strides(shape, strides);
   }
 
   // Constructor for a sub-tensor
@@ -85,7 +84,7 @@ class Array : public std::enable_shared_from_this<Array> {
     return std::make_shared<Array>(shared_from_this(), offset, newShape, newStrides);
   }
 
-  void CalculateStrides(const std::vector<int>& shape, std::vector<int>& strides) {
+  void calculate_strides(const std::vector<int>& shape, std::vector<int>& strides) {
     strides.resize(shape.size());
     int stride = 1;
     for (int i = shape.size() - 1; i >= 0; --i) {
@@ -127,20 +126,20 @@ std::shared_ptr<Array> map_function(const std::shared_ptr<Array>& a, std::functi
   auto a_data = a->data;
   auto a_strides = a->strides;
 
-  size_t totalElements = std::accumulate(a_shape.begin(), a_shape.end(), 1, std::multiplies<int>());
+  size_t nelements = std::accumulate(a_shape.begin(), a_shape.end(), 1, std::multiplies<int>());
 
-  std::vector<float> result(totalElements);
+  std::vector<float> result(nelements);
 
-  for (size_t i = 0; i < totalElements; ++i) {
-    size_t indexA = 0;
+  for (size_t i = 0; i < nelements; ++i) {
+    size_t a_index = 0;
     size_t remainder = i;
     for (size_t dim = 0; dim < a_shape.size(); ++dim) {
-      size_t strideA = a_strides[dim];
-      size_t dimIndex = remainder / std::accumulate(a_shape.begin() + dim + 1, a_shape.end(), 1, std::multiplies<int>());
+      size_t a_stride = a_strides[dim];
+      size_t dim_index = remainder / std::accumulate(a_shape.begin() + dim + 1, a_shape.end(), 1, std::multiplies<int>());
       remainder %= std::accumulate(a_shape.begin() + dim + 1, a_shape.end(), 1, std::multiplies<int>());
-      indexA += dimIndex * strideA;
+      a_index += dim_index * a_stride;
     }
-    result[i] = op(a_data[indexA]);
+    result[i] = op(a_data[a_index]);
   }
 
   return std::make_shared<Array>(result, a_shape);
@@ -158,7 +157,7 @@ std::shared_ptr<Array> powf(const std::shared_ptr<Array>& a, float b) {
   return map_function(a, [b](float x) { return std::pow(x, b); });
 }
 
-std::shared_ptr<Array> ElementWiseOpBroadcast(const std::shared_ptr<Array>& a, const std::shared_ptr<Array>& b, bool assign, std::function<float(float, float)> op) {
+std::shared_ptr<Array> broadcast_op(const std::shared_ptr<Array>& a, const std::shared_ptr<Array>& b, bool assign, std::function<float(float, float)> op) {
   // Determine the result shape
   size_t maxDims = std::max(a->shape.size(), b->shape.size());
   std::vector<int> out_shape(maxDims);
@@ -205,24 +204,11 @@ std::shared_ptr<Array> ElementWiseOpBroadcast(const std::shared_ptr<Array>& a, c
         indexB += dimIndex * b_broadcast_strides[dim];
       }
     }
-    // switch (op) {
-    //   case '+':
-        if (assign) {
-          a->data[indexA] = op(a->data[indexA], b->data[indexB]);
-        } else {
-          out_data[i] = op(a->data[indexA], b->data[indexB]);
-        }
-      //   break;
-      // case '*':
-      //   if (assign) {
-      //     a->data[indexA] *= b->data[indexB];
-      //   } else {
-      //     out_data[i] = a->data[indexA] * b->data[indexB];
-      //   }
-      //   break;
-      // default:
-      //   throw std::invalid_argument("Invalid operation.");
-    // }
+    if (assign) {
+      a->data[indexA] = op(a->data[indexA], b->data[indexB]);
+    } else {
+      out_data[i] = op(a->data[indexA], b->data[indexB]);
+    }
   }
 
   if (assign) {
@@ -232,7 +218,7 @@ std::shared_ptr<Array> ElementWiseOpBroadcast(const std::shared_ptr<Array>& a, c
 }
 
 std::shared_ptr<Array> operator*(const std::shared_ptr<Array>& a, const std::shared_ptr<Array>& b) {
-  return ElementWiseOpBroadcast(a, b, false, std::multiplies<float>());
+  return broadcast_op(a, b, false, std::multiplies<float>());
 }
 
 std::shared_ptr<Array> operator*(const std::shared_ptr<Array>& a, float b) {
@@ -256,7 +242,7 @@ std::shared_ptr<Array> operator/(float a, const std::shared_ptr<Array>& b) {
 }
 
 std::shared_ptr<Array> operator+(const std::shared_ptr<Array>& a, const std::shared_ptr<Array>& b) {
-  return ElementWiseOpBroadcast(a, b, false, std::plus<float>());
+  return broadcast_op(a, b, false, std::plus<float>());
 }
 
 std::shared_ptr<Array> operator+(const std::shared_ptr<Array>& a, float b) {
@@ -298,9 +284,7 @@ std::shared_ptr<Array> sum(const std::shared_ptr<Array>& a) {
     sum += a->data[flatIndex];
   }
 
-  std::vector<float> result = {sum};
-  std::vector<int> shape = {1};
-  return std::make_shared<Array>(result, shape);
+  return array_from_vector({sum}, {1});
 }
 
 std::shared_ptr<Array> multiply_transpose(const std::shared_ptr<Array>& a, bool a_transpose, const std::shared_ptr<Array>& b, bool b_transpose) {
@@ -330,14 +314,12 @@ std::shared_ptr<Array> multiply_transpose(const std::shared_ptr<Array>& a, bool 
       result[i * p + j] = dotProduct;
     }
   }
-  std::vector<int> shape = {m, p};
-  return std::make_shared<Array>(result, shape);
+  return array_from_vector(result, {m, p});
 }
 
 std::shared_ptr<Array> operator%(const std::shared_ptr<Array>& a, const std::shared_ptr<Array>& b) {
   return multiply_transpose(a, false, b, false);
 }
-
 
 class Tensor;
 
@@ -345,25 +327,29 @@ std::shared_ptr<Tensor> from_vector(const std::vector<float>& data, const std::v
   return std::make_shared<Tensor>(std::make_shared<Array>(data, shape));
 }
 
+std::shared_ptr<Tensor> from_array(const std::shared_ptr<Array>& data) {
+  return std::make_shared<Tensor>(data);
+}
+
 class Tensor : public std::enable_shared_from_this<Tensor> {
  public:
   std::shared_ptr<Array> data;
   std::shared_ptr<Array> grad;
-  std::function<void()> backward;
-  std::shared_ptr<Tensor> a;
-  std::shared_ptr<Tensor> b;
-  char op;
+  std::vector<std::shared_ptr<Tensor>> children;
+  std::function<void()> backprop;
 
-  Tensor(std::shared_ptr<Array> data)
-      : data(data), grad(), op('\0'), a(nullptr), b(nullptr) {}
+  Tensor(const std::shared_ptr<Array>& data)
+      : data(data), grad() {}
 
-  Tensor(std::shared_ptr<Array> data, char op, std::shared_ptr<Tensor> a, std::shared_ptr<Tensor> b)
-      : data(data), op(op), a(a), b(b) {}
+  Tensor(const std::shared_ptr<Array>& data, const std::vector<std::shared_ptr<Tensor>>& children, std::function<void()> backprop)
+      : data(data), grad(), children(children), backprop(backprop) {}
 
+  // TODO: Needs backprop function
   std::shared_ptr<Tensor> operator[](int index) {
     return std::make_shared<Tensor>((*data)[index]);
   }
 
+  // TODO: Needs backprop function
   std::shared_ptr<Tensor> slice(const std::vector<Slice>& slices) {
     return std::make_shared<Tensor>(data->slice(slices));
   }
@@ -372,7 +358,7 @@ class Tensor : public std::enable_shared_from_this<Tensor> {
     data->print(indent);
   }
 
-  void InitGrad() {
+  void init_grad() {
     int nelements = std::accumulate(data->shape.begin(), data->shape.end(), 1, std::multiplies<int>());
     if (!grad) {
       grad = std::make_shared<Array>(std::vector<float>(nelements), data->shape);
@@ -382,31 +368,28 @@ class Tensor : public std::enable_shared_from_this<Tensor> {
     }
   }
 
-  void Backward() {
-    InitGrad();
+  void backward() {
+    init_grad();
     for (auto& val : grad->data) {
       val = 1.0f;
     }
     auto sorted = std::vector<std::shared_ptr<Tensor>>();
-    TopologicalSort(sorted);
+    topological_sort(sorted);
     for (auto& node : sorted) {
-      node->BackwardStep();
+      node->backward_step();
     }
   }
 
  private:
-  void TopologicalSort(std::vector<std::shared_ptr<Tensor>>& sorted) {
+  void topological_sort(std::vector<std::shared_ptr<Tensor>>& sorted) {
     std::unordered_set<std::shared_ptr<Tensor>> visited;
     std::function<void(const std::shared_ptr<Tensor>&)> dfs = [&](const std::shared_ptr<Tensor>& node) {
       if (visited.count(node)) {
         return;
       }
       visited.insert(node);
-      if (node->a) {
-        dfs(node->a);
-      }
-      if (node->b) {
-        dfs(node->b);
+      for (auto& child : node->children) {
+        dfs(child);
       }
       sorted.push_back(node);
     };
@@ -414,70 +397,60 @@ class Tensor : public std::enable_shared_from_this<Tensor> {
     std::reverse(sorted.begin(), sorted.end());
   }
 
-  void BackwardStep() {
-    if (a) {
-      a->InitGrad();
+  void backward_step() {
+    for (auto& child : children) {
+      child->init_grad();
     }
-    if (b) {
-      b->InitGrad();
-    }
-    float power;
-    switch (op) {
-      case '\0':
-        return;
-      case '+':
-        // This special call ensures that the result is the same size, even if broadcasting was occurring
-
-        // a->grad = a->grad + grad;
-        ElementWiseOpBroadcast(a->grad, grad, true, std::plus<float>());
-        if (b) {
-          // b->grad = b->grad + grad;
-          ElementWiseOpBroadcast(b->grad, grad, true, std::plus<float>());
-        }
-        break;
-      case '*':
-        a->grad = a->grad + grad * b->data;
-        b->grad = b->grad + grad * a->data;
-        break;
-      case 't':
-        a->grad = a->grad + grad * (1.0f - data * data);
-        break;
-      case 'e':
-        a->grad = a->grad + grad * data;
-        break;
-      case 'p':
-        a->grad = a->grad + grad * (b->data * powf(a->data, b->data->data[0] - 1.0f));
-        break;
-      case '%':
-        // a->grad += grad * b->data^T
-        // b->grad += a->data^T * grad
-        a->grad = a->grad + multiply_transpose(grad, false, b->data, true);
-        b->grad = b->grad + multiply_transpose(a->data, true, grad, false);
-        break;
-      default:
-        throw std::invalid_argument("Invalid operation.");
+    if (backprop) {
+      backprop();
     }
   }
 };
 
 std::shared_ptr<Tensor> tanhf(const std::shared_ptr<Tensor>& a) {
-  return std::make_shared<Tensor>(tanhf(a->data), 't', a, nullptr);
+  auto result = from_array(tanhf(a->data));
+  result->children = {a};
+  result->backprop = [a, result]() {
+    a->grad = a->grad + result->grad * (1.0f - result->data * result->data);
+  };
+  return result;
 }
 
 std::shared_ptr<Tensor> expf(const std::shared_ptr<Tensor>& a) {
-  return std::make_shared<Tensor>(expf(a->data), 'e', a, nullptr);
+  auto result = from_array(expf(a->data));
+  result->children = {a};
+  result->backprop = [a, result]() {
+    a->grad = a->grad + result->grad * result->data;
+  };
+  return result;
 }
 
 std::shared_ptr<Tensor> powf(const std::shared_ptr<Tensor>& a, float b) {
-  return std::make_shared<Tensor>(powf(a->data, b), 'p', a, from_vector({b}, {1}));
+  auto result = from_array(powf(a->data, b));
+  result->children = {a};
+  result->backprop = [a, result, b]() {
+    a->grad = a->grad + result->grad * b * powf(a->data, b - 1.0f);
+  };
+  return result;
 }
 
 std::shared_ptr<Tensor> sum(const std::shared_ptr<Tensor>& a) {
-  return std::make_shared<Tensor>(sum(a->data), '+', a, nullptr);
+  auto result = from_array(sum(a->data));
+  result->children = {a};
+  result->backprop = [a, result]() {
+    broadcast_op(a->grad, result->grad, true, std::plus<float>());
+  };
+  return result;
 }
 
 std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
-  return std::make_shared<Tensor>(a->data * b->data, '*', a, b);
+  auto result = from_array(a->data * b->data);
+  result->children = {a, b};
+  result->backprop = [a, b, result]() {
+    a->grad = a->grad + result->grad * b->data;
+    b->grad = b->grad + result->grad * a->data;
+  };
+  return result;
 }
 
 std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor>& a, float b) {
@@ -501,7 +474,13 @@ std::shared_ptr<Tensor> operator/(float a, const std::shared_ptr<Tensor>& b) {
 }
 
 std::shared_ptr<Tensor> operator+(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
-  return std::make_shared<Tensor>(a->data + b->data, '+', a, b);
+  auto result = from_array(a->data + b->data);
+  result->children = {a, b};
+  result->backprop = [a, b, result]() {
+    broadcast_op(a->grad, result->grad, true, std::plus<float>());
+    broadcast_op(b->grad, result->grad, true, std::plus<float>());
+  };
+  return result;
 }
 
 std::shared_ptr<Tensor> operator+(const std::shared_ptr<Tensor>& a, float b) {
@@ -513,7 +492,7 @@ std::shared_ptr<Tensor> operator+(float a, const std::shared_ptr<Tensor>& b) {
 }
 
 std::shared_ptr<Tensor> operator-(const std::shared_ptr<Tensor>& a) {
-  return std::make_shared<Tensor>(-1.0f * a->data, '*', a, from_vector({-1.0f}, {1}));
+  return from_vector({-1.0f}, {1}) * a;
 }
 
 std::shared_ptr<Tensor> operator-(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
@@ -530,9 +509,14 @@ std::shared_ptr<Tensor> operator-(float a, const std::shared_ptr<Tensor>& b) {
 
 // Matrix multiplication operator
 std::shared_ptr<Tensor> operator%(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
-  return std::make_shared<Tensor>(a->data % b->data, '%', a, b);
+  auto result = from_array(a->data % b->data);
+  result->children = {a, b};
+  result->backprop = [a, b, result]() {
+    a->grad = a->grad + multiply_transpose(result->grad, false, b->data, true);
+    b->grad = b->grad + multiply_transpose(a->data, true, result->grad, false);
+  };
+  return result;
 }
-
 
 template <typename Engine>
 std::shared_ptr<Tensor> randn(const std::vector<int>& shape, Engine& engine) {
@@ -541,17 +525,17 @@ std::shared_ptr<Tensor> randn(const std::vector<int>& shape, Engine& engine) {
   for (auto& val : data) {
     val = distribution(engine);
   }
-  return std::make_shared<Tensor>(std::make_shared<Array>(data, shape));
+  return from_vector(data, shape);
 }
 
 std::shared_ptr<Tensor> zeros(const std::vector<int>& shape) {
   std::vector<float> data(std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>()));
-  return std::make_shared<Tensor>(std::make_shared<Array>(data, shape));
+  return from_vector(data, shape);
 }
 
 std::shared_ptr<Tensor> ones(const std::vector<int>& shape) {
   std::vector<float> data(std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>()), 1.0f);
-  return std::make_shared<Tensor>(std::make_shared<Array>(data, shape));
+  return from_vector(data, shape);
 }
 
 class Layer {
@@ -710,7 +694,7 @@ int main() {
 
     std::shared_ptr<Tensor> ypred;
 
-    for (int k = 0; k < 500; k += 1) {
+    for (int k = 0; k < 2000; k += 1) {
       // Forward pass
       ypred = n(xs);
       auto err = powf(ypred - ys, 2.0f);
@@ -725,7 +709,7 @@ int main() {
           layer.b->grad = nullptr;
         }
       }
-      loss->Backward();
+      loss->backward();
 
       // Update
       for (auto& layer : n.layers) {
