@@ -76,4 +76,3 @@ public:
 
   std::vector<Layer> layers;
 };
-
