@@ -1,0 +1,7 @@
+---
+BasedOnStyle: Google
+IndentWidth: 2
+TabWidth: 2
+ContinuationIndentWidth: 2
+ColumnLimit: 0
+AlignAfterOpenBracket: BlockIndent
