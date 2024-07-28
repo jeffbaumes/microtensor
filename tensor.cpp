@@ -576,113 +576,101 @@ class MLP {
 };
 
 int main() {
-  // {
-  //   auto m = std::make_shared<Tensor>(Tensor({0, 1, 2, 2, 1, 0}, {1, 2, 3, 1}));
-  //   m->print();
-  // }
+  {
+    auto m = from_vector({0, 1, 2, 2, 1, 0}, {1, 2, 3, 1});
+    m->print();
+  }
 
-  // {
-  //   auto m1 = std::make_shared<Tensor>(Tensor({0, 1, 2, 2, 1, 0}, {2, 3}));
-  //   auto m2 = std::make_shared<Tensor>(Tensor({1, 1, 1, 2, 1, 3}, {3, 2}));
-  //   m2 = m2->slice({{0, -1}, {0, 1}});
-  //   auto result = m1 % m2;
-  //   std::cout << "m1:" << std::endl;
-  //   m1->print();
-  //   std::cout << "m2:" << std::endl;
-  //   m2->print();
-  //   std::cout << "result:" << std::endl;
-  //   result->print();
-  //   assert(result->data == std::vector<float>({3, 3}));
-  //   assert(result->shape == std::vector<int>({2, 1}));
-  // }
+  {
+    auto m1 = from_vector({0, 1, 2, 2, 1, 0}, {2, 3});
+    auto m2 = from_vector({1, 1, 1, 2, 1, 3}, {3, 2});
+    m2 = m2->slice({{0, -1}, {0, 1}});
+    auto result = m1 % m2;
+    std::cout << "m1:" << std::endl;
+    m1->print();
+    std::cout << "m2:" << std::endl;
+    m2->print();
+    std::cout << "result:" << std::endl;
+    result->print();
+    assert(result->data->data == std::vector<float>({3, 3}));
+    assert(result->data->shape == std::vector<int>({2, 1}));
+  }
 
-  // {
-  //   auto tensor = Tensor({1, 2, 3, 4, 5, 6}, {3, 2});
+  {
+    auto tensor = from_vector({1, 2, 3, 4, 5, 6}, {3, 2});
 
-  //   std::cout << "Original Tensor:" << std::endl;
-  //   for (int i = 0; i < tensor.shape[0]; ++i) {
-  //     for (int j = 0; j < tensor.shape[1]; ++j) {
-  //       std::cout << tensor.slice({{i}, {j}})->data[0] << " ";
-  //     }
-  //     std::cout << std::endl;
-  //   }
+    std::cout << "Original Tensor:" << std::endl;
+    tensor->print();
 
-  //   auto subTensor = tensor.slice({{1, -1}, {0, 1}});
-  //   std::cout << "Sub-Tensor:" << std::endl;
-  //   // std::cout << subTensor.shape.size() << std::endl;
-  //   // std::cout << subTensor.shape[0] << " " << subTensor.shape[1] << std::endl;
-  //   for (int i = 0; i < subTensor->shape[0]; ++i) {
-  //     for (int j = 0; j < subTensor->shape[1]; ++j) {
-  //       std::cout << subTensor->slice({{i}, {j}})->data[0] << " ";
-  //     }
-  //     std::cout << std::endl;
-  //   }
-  // }
+    auto subTensor = tensor->slice({{1, -1}, {0, 1}});
+    std::cout << "Sub-Tensor:" << std::endl;
+    subTensor->print();
+  }
 
-  // {
-  //   auto t1 = std::make_shared<Tensor>(Tensor({1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6}, {2, 3, 2}));
-  //   auto t2 = std::make_shared<Tensor>(Tensor({1, 2, 3, 4, 5, 6}, {3, 2}));
-  //   std::cout << "t1:" << std::endl;
-  //   t1->print();
-  //   t1 = (*t1)[0];
-  //   std::cout << "t1:" << std::endl;
-  //   t1->print();
-  //   auto sum = t1 + t2;
-  //   std::cout << "sum:" << std::endl;
-  //   sum->print();
-  //   auto prod = t1 * t2;
-  //   std::cout << "prod:" << std::endl;
-  //   prod->print();
-  // }
+  {
+    auto t1 = from_vector({1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6}, {2, 3, 2});
+    auto t2 = from_vector({1, 2, 3, 4, 5, 6}, {3, 2});
+    std::cout << "t1:" << std::endl;
+    t1->print();
+    t1 = (*t1)[0];
+    std::cout << "t1:" << std::endl;
+    t1->print();
+    auto sum = t1 + t2;
+    std::cout << "sum:" << std::endl;
+    sum->print();
+    auto prod = t1 * t2;
+    std::cout << "prod:" << std::endl;
+    prod->print();
+  }
 
-  // {
-  //   auto t1 = from_vector({1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6}, {3, 2, 2});
-  //   auto t2 = from_vector({1, 2, 3, 4, 5, 6}, {3, 2});
-  //   std::cout << "t1:" << std::endl;
-  //   t1->print();
-  //   t1 = t1->slice({{0, -1}, {0, -1}, {0}});
-  //   std::cout << "t1:" << std::endl;
-  //   t1->print();
-  //   std::cout << "t2:" << std::endl;
-  //   t2->print();
-  //   auto sum = t1 + t2;
-  //   std::cout << "sum:" << std::endl;
-  //   sum->print();
-  //   assert(sum->data->data == std::vector<float>({2, 4, 6, 8, 10, 12}));
-  //   auto prod = t1 * t2;
-  //   std::cout << "prod:" << std::endl;
-  //   prod->print();
-  //   assert(prod->data->data == std::vector<float>({1, 4, 9, 16, 25, 36}));
-  // }
+  {
+    auto t1 = from_vector({1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6}, {3, 2, 2});
+    auto t2 = from_vector({1, 2, 3, 4, 5, 6}, {3, 2});
+    std::cout << "t1:" << std::endl;
+    t1->print();
+    t1 = t1->slice({{0, -1}, {0, -1}, {0}});
+    std::cout << "t1:" << std::endl;
+    t1->print();
+    std::cout << "t2:" << std::endl;
+    t2->print();
+    auto sum = t1 + t2;
+    std::cout << "sum:" << std::endl;
+    sum->print();
+    assert(sum->data->data == std::vector<float>({2, 4, 6, 8, 10, 12}));
+    auto prod = t1 * t2;
+    std::cout << "prod:" << std::endl;
+    prod->print();
+    assert(prod->data->data == std::vector<float>({1, 4, 9, 16, 25, 36}));
+  }
 
-  // {
-  //   auto x = from_vector({1, 2, 3, 4, 5, 6}, {3, 2});
-  //   std::cout << "x:" << std::endl;
-  //   x->print();
-  //   auto W = from_vector({1, 2, 3, 4}, {2, 2});
-  //   std::cout << "W:" << std::endl;
-  //   W->print();
-  //   auto b = from_vector({1, 2}, {1, 2});
-  //   std::cout << "b:" << std::endl;
-  //   b->print();
-  //   auto prod = x % W;
-  //   std::cout << "x % W:" << std::endl;
-  //   prod->print();
-  //   auto out = prod + b;
-  //   std::cout << "x % W + b:" << std::endl;
-  //   out->print();
-  //   out->Backward();
-  //   std::cout << "x->grad:" << std::endl;
-  //   x->grad->print();
-  //   std::cout << "W->grad:" << std::endl;
-  //   W->grad->print();
-  //   std::cout << "b->grad:" << std::endl;
-  //   b->grad->print();
-  //   std::cout << "prod->grad:" << std::endl;
-  //   prod->grad->print();
-  //   std::cout << "out->grad:" << std::endl;
-  //   out->grad->print();
-  // }
+  {
+    auto x = from_vector({1, 2, 3, 4, 5, 6}, {3, 2});
+    std::cout << "x:" << std::endl;
+    x->print();
+    auto W = from_vector({1, 2, 3, 4}, {2, 2});
+    std::cout << "W:" << std::endl;
+    W->print();
+    auto b = from_vector({1, 2}, {1, 2});
+    std::cout << "b:" << std::endl;
+    b->print();
+    auto prod = x % W;
+    std::cout << "x % W:" << std::endl;
+    prod->print();
+    auto out = prod + b;
+    std::cout << "x % W + b:" << std::endl;
+    out->print();
+    out->backward();
+    std::cout << "x->grad:" << std::endl;
+    x->grad->print();
+    std::cout << "W->grad:" << std::endl;
+    W->grad->print();
+    std::cout << "b->grad:" << std::endl;
+    b->grad->print();
+    std::cout << "prod->grad:" << std::endl;
+    prod->grad->print();
+    std::cout << "out->grad:" << std::endl;
+    out->grad->print();
+  }
 
   {
     // video 1: micrograd example
