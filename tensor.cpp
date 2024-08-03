@@ -268,3 +268,7 @@ std::shared_ptr<Tensor> MLP::operator()(const std::shared_ptr<Tensor>& inputs) {
   }
   return outputs;
 }
+
+std::shared_ptr<Tensor> squeeze(const std::shared_ptr<Tensor>& x) {
+  return from_array(squeeze(x->data));
+}

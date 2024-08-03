@@ -103,9 +103,9 @@ int main() {
   while (std::getline(file, name)) {
     names.push_back(name);
     num_names += 1;
-    // if (num_names == 500) {
-    //   break;
-    // }
+    if (num_names == 5000) {
+      break;
+    }
   }
 
   std::map<char, int> stoi;
@@ -144,7 +144,7 @@ int main() {
   std::default_random_engine engine(std::random_device{}());
   auto W = randn({27, 27}, engine);
 
-  for (int k = 0; k < 100; k += 1) {
+  for (int k = 0; k < 50; k += 1) {
     // Forward pass
     auto xenc = one_hot(xs, 27);
     auto logits = xenc % W;
@@ -162,6 +162,25 @@ int main() {
 
     // Update
     W->data = W->data - 50.0f * W->grad;
+  }
+
+  for (int i = 0; i < 50; i += 1) {
+    std::string out;
+    float ix = 0.0f;
+    while (true) {
+      auto xenc = one_hot(from_vector({ix}, {1}), 27);
+      auto logits = xenc % W;
+      auto counts = exp(logits);
+      auto counts_sum = sum(counts, {1});
+      auto probs = counts / counts_sum;
+      auto pred = multinomial(probs, engine);
+      ix = pred->data->data[0];
+      if (ix == 0) {
+        break;
+      }
+      out += itos[ix];
+    }
+    std::cout << out << std::endl;
   }
 
   return 0;

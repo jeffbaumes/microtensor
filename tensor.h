@@ -59,6 +59,23 @@ std::shared_ptr<Tensor> operator-(const std::shared_ptr<Tensor>& a, const std::s
 std::shared_ptr<Tensor> operator-(const std::shared_ptr<Tensor>& a, float b);
 std::shared_ptr<Tensor> operator-(float a, const std::shared_ptr<Tensor>& b);
 std::shared_ptr<Tensor> operator%(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b);
+std::shared_ptr<Tensor> squeeze(const std::shared_ptr<Tensor>& x);
+
+template <typename Engine>
+std::shared_ptr<Tensor> multinomial(const std::shared_ptr<Tensor>& probs, Engine& engine) {
+  auto p = squeeze(probs);
+  if (p->data->shape.size() != 1) {
+    throw std::runtime_error("probabilities must be one-dimensional");
+  }
+  auto u = std::uniform_real_distribution<float>(0, 1)(engine);
+  for (float i = 0; i < p->nelements(); i += 1) {
+    u -= p->index({from_vector({i}, {1})})->data->data[0];
+    if (u <= 0) {
+      return from_vector({i}, {1});
+    }
+  }
+  return from_vector({static_cast<float>(p->nelements() - 1)}, {1});
+}
 
 template <typename Engine>
 std::shared_ptr<Tensor> randn(const std::vector<int>& shape, Engine& engine) {

@@ -432,3 +432,14 @@ std::shared_ptr<Array> multiply_transpose(const std::shared_ptr<Array>& a, bool 
 std::shared_ptr<Array> operator%(const std::shared_ptr<Array>& a, const std::shared_ptr<Array>& b) {
   return multiply_transpose(a, false, b, false);
 }
+
+std::shared_ptr<Array> squeeze(const std::shared_ptr<Array>& x) {
+  auto shape = x->shape;
+  std::vector<int> new_shape;
+  for (auto& s : shape) {
+    if (s != 1) {
+      new_shape.push_back(s);
+    }
+  }
+  return array_from_vector(x->data, new_shape);
+}
