@@ -106,6 +106,10 @@ std::shared_ptr<Tensor> powf(const std::shared_ptr<Tensor>& a, float b) {
   return result;
 }
 
+std::shared_ptr<Tensor> one_hot(const std::shared_ptr<Tensor>& x, int num_classes) {
+  return from_array(one_hot(x->data, num_classes));
+}
+
 std::shared_ptr<Tensor> sum(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims) {
   auto result = from_array(sum(a->data, dims));
   result->children = {a};

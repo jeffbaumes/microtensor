@@ -1,5 +1,7 @@
 #include "array.h"
 
+#include <map>
+
 Slice::Slice(int start, int stop) : start(start), stop(stop), direct(false) {}
 
 Slice::Slice(int idx) : start(idx), stop(idx + 1), direct(true) {}
@@ -256,6 +258,43 @@ std::shared_ptr<Array> operator-(const std::shared_ptr<Array>& a, float b) {
 
 std::shared_ptr<Array> operator-(float a, const std::shared_ptr<Array>& b) {
   return a + (-b);
+}
+
+std::shared_ptr<Array> one_hot(const std::shared_ptr<Array>& x, int num_classes) {
+  if (num_classes == -1) {
+    std::unordered_set<float> unique_values;
+    int nelements = x->nelements();
+    for (int i = 0; i < nelements; i += 1) {
+      size_t remainder = i;
+      std::vector<int> inputIndices(x->shape.size(), 0);
+      for (size_t dim = 0; dim < x->shape.size(); ++dim) {
+        inputIndices[dim] = remainder % x->shape[dim];
+        remainder /= x->shape[dim];
+      }
+      size_t inputFlatIndex = 0;
+      for (size_t dim = 0; dim < inputIndices.size(); ++dim) {
+        inputFlatIndex += inputIndices[dim] * x->strides[dim];
+      }
+      unique_values.insert(x->data[inputFlatIndex]);
+    }
+    num_classes = unique_values.size();
+  }
+  auto shape = x->shape;
+  shape.push_back(num_classes);
+  auto result_data = std::vector<float>(std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>()), 0.0f);
+  std::map<float, int> encoding;
+  int nelements = x->nelements();
+  for (int i = 0; i < nelements; i += 1) {
+    float value = x->data[i];
+    if (encoding.find(value) == encoding.end()) {
+      encoding[value] = encoding.size();
+    }
+    if (encoding.size() > num_classes) {
+      throw std::runtime_error("Number of unique values in x exceeds num_classes");
+    }
+    result_data[i * num_classes + encoding[value]] = 1;
+  }
+  return std::make_shared<Array>(result_data, shape);
 }
 
 std::shared_ptr<Array> sum(const std::shared_ptr<Array>& a, const std::vector<int>& d) {

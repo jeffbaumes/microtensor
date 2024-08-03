@@ -39,6 +39,7 @@ std::shared_ptr<Tensor> from_array(const std::shared_ptr<Array>& data);
 std::shared_ptr<Tensor> tanhf(const std::shared_ptr<Tensor>& a);
 std::shared_ptr<Tensor> expf(const std::shared_ptr<Tensor>& a);
 std::shared_ptr<Tensor> powf(const std::shared_ptr<Tensor>& a, float b);
+std::shared_ptr<Tensor> one_hot(const std::shared_ptr<Tensor>& x, int num_classes = -1);
 std::shared_ptr<Tensor> sum(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims = {});
 std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b);
 std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor>& a, float b);

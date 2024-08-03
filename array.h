@@ -62,6 +62,7 @@ std::shared_ptr<Array> map_function(const std::shared_ptr<Array>& a, std::functi
 std::shared_ptr<Array> tanhf(const std::shared_ptr<Array>& a);
 std::shared_ptr<Array> expf(const std::shared_ptr<Array>& a);
 std::shared_ptr<Array> powf(const std::shared_ptr<Array>& a, float b);
+std::shared_ptr<Array> one_hot(const std::shared_ptr<Array>& x, int num_classes = -1);
 std::shared_ptr<Array> sum(const std::shared_ptr<Array>& a, const std::vector<int>& dims = {});
 std::shared_ptr<Array> multiply_transpose(const std::shared_ptr<Array>& a, bool a_transpose, const std::shared_ptr<Array>& b, bool b_transpose);
 std::shared_ptr<Array> operator%(const std::shared_ptr<Array>& a, const std::shared_ptr<Array>& b);

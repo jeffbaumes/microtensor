@@ -1,30 +1,9 @@
+#include "tensor.h"
+
 #include <iostream>
 #include <fstream>
 #include <map>
 #include <vector>
-
-#include "tensor.h"
-
-std::shared_ptr<Array> one_hot(const std::shared_ptr<Array>& x, int num_classes) {
-  ;
-  auto shape = x->shape;
-  shape.push_back(num_classes);
-  auto result_data = std::vector<float>(std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>()), 0.0f);
-  std::map<float, int> encoding;
-  int nelements = x->nelements();
-  for (int i = 0; i < nelements; i += 1) {
-    float value = x->data[i];
-    if (encoding.find(value) == encoding.end()) {
-      encoding[value] = encoding.size();
-    }
-    result_data[i * num_classes + encoding[value]] = 1;
-  }
-  return std::make_shared<Array>(result_data, shape);
-}
-
-std::shared_ptr<Tensor> one_hot(const std::shared_ptr<Tensor>& x, int num_classes) {
-  return from_array(one_hot(x->data, num_classes));
-}
 
 int main() {
   {
@@ -42,6 +21,17 @@ int main() {
     auto s = sum(t);
     s->print();
     assert(s->data->data[0] == 21);
+  }
+
+  {
+    auto t = from_vector({1, 0, 1, 1}, {4});
+    t->print();
+    auto h = one_hot(t);
+    h->print();
+    assert(h->data->data == std::vector<float>({1, 0, 0, 1, 1, 0, 1, 0}));
+    auto h2 = one_hot(t, 3);
+    h2->print();
+    assert(h2->data->data == std::vector<float>({1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0}));
   }
 
   // Read names.txt into a vector of strings
