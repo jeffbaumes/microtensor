@@ -1,4 +1,5 @@
-a.out
-value
-tensor
+callgrind.out.*
 .vscode
+lesson-01
+lesson-02
+value

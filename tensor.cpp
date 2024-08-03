@@ -6,6 +6,10 @@ Tensor::Tensor(const std::shared_ptr<Array>& data)
 Tensor::Tensor(const std::shared_ptr<Array>& data, const std::vector<std::shared_ptr<Tensor>>& children, std::function<void()> backprop)
     : data(data), grad(), children(children), backprop(backprop) {}
 
+int Tensor::nelements() {
+  return data->nelements();
+}
+
 // TODO: Needs backprop function
 std::shared_ptr<Tensor> Tensor::operator[](int index) {
   return std::make_shared<Tensor>((*data)[index]);
@@ -21,11 +25,11 @@ void Tensor::print(const std::string& indent) {
 }
 
 void Tensor::init_grad() {
-  int nelements = std::accumulate(data->shape.begin(), data->shape.end(), 1, std::multiplies<int>());
+  int num = nelements();
   if (!grad) {
-    grad = std::make_shared<Array>(std::vector<float>(nelements), data->shape);
+    grad = std::make_shared<Array>(std::vector<float>(num), data->shape);
   } else if (grad->shape != data->shape) {
-    grad->data.resize(nelements);
+    grad->data.resize(num);
     grad->shape = data->shape;
   }
 }
@@ -102,8 +106,8 @@ std::shared_ptr<Tensor> powf(const std::shared_ptr<Tensor>& a, float b) {
   return result;
 }
 
-std::shared_ptr<Tensor> sum(const std::shared_ptr<Tensor>& a) {
-  auto result = from_array(sum(a->data));
+std::shared_ptr<Tensor> sum(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims) {
+  auto result = from_array(sum(a->data, dims));
   result->children = {a};
   result->backprop = [a, result]() {
     broadcast_op(a->grad, result->grad, true, std::plus<float>());

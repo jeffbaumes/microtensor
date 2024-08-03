@@ -22,6 +22,10 @@ Array::Array(
     shape(shape),
     strides(strides) {}
 
+int Array::nelements() {
+  return std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>());
+}
+
 std::shared_ptr<Array> Array::operator[](int index) {
   int offset = index * strides[0];
   if (shape.size() == 1) {
@@ -98,12 +102,20 @@ std::shared_ptr<Array> array_from_vector(const std::vector<float>& data, const s
   return std::make_shared<Array>(data, shape);
 }
 
-std::shared_ptr<Array> map_function(const std::shared_ptr<Array>& a, std::function<float(float)> op) {
+std::shared_ptr<Array> map_function(const std::shared_ptr<Array>& a, std::function<float(const std::vector<int>&,float)> op) {
   auto a_shape = a->shape;
   auto a_data = a->data;
   auto a_strides = a->strides;
 
-  size_t nelements = std::accumulate(a_shape.begin(), a_shape.end(), 1, std::multiplies<int>());
+  size_t nelements = a->nelements();
+
+  std::vector<int> index(a_shape.size(), 0);
+
+  // Precompute the products of dimensions for each dimension
+  std::vector<size_t> dim_products(a_shape.size());
+  for (size_t dim = 0; dim < a_shape.size(); ++dim) {
+    dim_products[dim] = std::accumulate(a_shape.begin() + dim + 1, a_shape.end(), 1, std::multiplies<int>());
+  }
 
   std::vector<float> result(nelements);
 
@@ -112,26 +124,26 @@ std::shared_ptr<Array> map_function(const std::shared_ptr<Array>& a, std::functi
     size_t remainder = i;
     for (size_t dim = 0; dim < a_shape.size(); ++dim) {
       size_t a_stride = a_strides[dim];
-      size_t dim_index = remainder / std::accumulate(a_shape.begin() + dim + 1, a_shape.end(), 1, std::multiplies<int>());
-      remainder %= std::accumulate(a_shape.begin() + dim + 1, a_shape.end(), 1, std::multiplies<int>());
-      a_index += dim_index * a_stride;
+      index[dim] = remainder / dim_products[dim];
+      remainder %= dim_products[dim];
+      a_index += index[dim] * a_stride;
     }
-    result[i] = op(a_data[a_index]);
+    result[i] = op(index, a_data[a_index]);
   }
 
   return std::make_shared<Array>(result, a_shape);
 }
 
 std::shared_ptr<Array> tanhf(const std::shared_ptr<Array>& a) {
-  return map_function(a, [](float x) { return std::tanh(x); });
+  return map_function(a, [](const std::vector<int>&, float x) { return std::tanh(x); });
 }
 
 std::shared_ptr<Array> expf(const std::shared_ptr<Array>& a) {
-  return map_function(a, [](float x) { return std::exp(x); });
+  return map_function(a, [](const std::vector<int>&, float x) { return std::exp(x); });
 }
 
 std::shared_ptr<Array> powf(const std::shared_ptr<Array>& a, float b) {
-  return map_function(a, [b](float x) { return std::pow(x, b); });
+  return map_function(a, [b](const std::vector<int>&, float x) { return std::pow(x, b); });
 }
 
 std::shared_ptr<Array> broadcast_op(const std::shared_ptr<Array>& a, const std::shared_ptr<Array>& b, bool assign, std::function<float(float, float)> op) {
@@ -246,22 +258,60 @@ std::shared_ptr<Array> operator-(float a, const std::shared_ptr<Array>& b) {
   return a + (-b);
 }
 
-std::shared_ptr<Array> sum(const std::shared_ptr<Array>& a) {
-  float sum = 0.0f;
-  size_t totalElements = std::accumulate(a->shape.begin(), a->shape.end(), 1, std::multiplies<size_t>());
-
-  for (size_t linearIndex = 0; linearIndex < totalElements; ++linearIndex) {
-    size_t flatIndex = 0;
-    size_t remainder = linearIndex;
-    for (size_t dim = 0; dim < a->shape.size(); ++dim) {
-      size_t dimIndex = remainder % a->shape[dim];
-      remainder /= a->shape[dim];
-      flatIndex += dimIndex * a->strides[dim];
+std::shared_ptr<Array> sum(const std::shared_ptr<Array>& a, const std::vector<int>& d) {
+  std::vector<int> dims;
+  if (d.size() == 0) {
+    for (int i = 0; i < a->shape.size(); ++i) {
+      dims.push_back(i);
     }
-    sum += a->data[flatIndex];
+  } else {
+    dims = d;
   }
 
-  return array_from_vector({sum}, {1});
+  std::vector<int> resultShape = a->shape;
+  for (int dim : dims) {
+    if (dim < resultShape.size()) {
+      resultShape[dim] = 1;
+    }
+  }
+
+  size_t totalResultElements = std::accumulate(resultShape.begin(), resultShape.end(), 1, std::multiplies<size_t>());
+  std::vector<float> resultData(totalResultElements, 0.0f);
+
+  std::vector<int> resultStrides(a->shape.size(), 0);
+  int stride = 1;
+  for (int i = resultShape.size() - 1; i >= 0; --i) {
+    resultStrides[i] = stride;
+    stride *= resultShape[i];
+  }
+
+  for (size_t linearIndex = 0; linearIndex < a->data.size(); ++linearIndex) {
+    size_t remainder = linearIndex;
+    std::vector<int> inputIndices(a->shape.size(), 0);
+    for (size_t dim = 0; dim < a->shape.size(); ++dim) {
+      inputIndices[dim] = remainder % a->shape[dim];
+      remainder /= a->shape[dim];
+    }
+
+    size_t inputFlatIndex = 0;
+    for (size_t dim = 0; dim < inputIndices.size(); ++dim) {
+      inputFlatIndex += inputIndices[dim] * a->strides[dim];
+    }
+
+    std::vector<int> outputIndices = inputIndices;
+    for (int dim : dims) {
+      outputIndices[dim] = 0; // Set dimensions being summed over to 0
+    }
+
+    size_t resultFlatIndex = 0;
+    for (size_t dim = 0; dim < outputIndices.size(); ++dim) {
+      resultFlatIndex += outputIndices[dim] * resultStrides[dim];
+    }
+
+    resultData[resultFlatIndex] += a->data[inputFlatIndex];
+  }
+
+  return array_from_vector(resultData, resultShape);
 }
 
 std::shared_ptr<Array> multiply_transpose(const std::shared_ptr<Array>& a, bool a_transpose, const std::shared_ptr<Array>& b, bool b_transpose) {
