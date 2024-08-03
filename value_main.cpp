@@ -9,7 +9,7 @@ int main() {
 
     auto e = a + b;
     auto f = c * d;
-    auto g = tanhf(e + f);
+    auto g = tanh(e + f);
 
     g->backward();
 
@@ -32,7 +32,7 @@ int main() {
     auto x2w2 = x2 * w2;
     auto x1w1x2w2 = x1w1 + x2w2;
     auto n = x1w1x2w2 + b;
-    auto o = tanhf(n);
+    auto o = tanh(n);
 
     o->backward();
 
@@ -58,7 +58,7 @@ int main() {
     auto x2w2 = x2 * w2;
     auto x1w1x2w2 = x1w1 + x2w2;
     auto n = x1w1x2w2 + b;
-    auto o = (expf(2*n) - 1) / (expf(2*n) + 1);
+    auto o = (exp(2*n) - 1) / (exp(2*n) + 1);
 
     o->backward();
 
@@ -147,10 +147,10 @@ int main() {
         n(xs[3])[0],
       };
       err = std::vector<std::shared_ptr<Value>> {
-        powf(ypred[0] - ys[0], 2.0f),
-        powf(ypred[1] - ys[1], 2.0f),
-        powf(ypred[2] - ys[2], 2.0f),
-        powf(ypred[3] - ys[3], 2.0f),
+        pow(ypred[0] - ys[0], 2.0f),
+        pow(ypred[1] - ys[1], 2.0f),
+        pow(ypred[2] - ys[2], 2.0f),
+        pow(ypred[3] - ys[3], 2.0f),
       };
       loss = err[0] + err[1] + err[2] + err[3];
 

@@ -110,7 +110,7 @@ int main() {
     for (int k = 0; k < 2000; k += 1) {
       // Forward pass
       ypred = n(xs);
-      auto err = powf(ypred - ys, 2.0f);
+      auto err = pow(ypred - ys, 2.0f);
       auto loss = sum(err);
 
       // Backward pass

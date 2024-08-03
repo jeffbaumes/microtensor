@@ -39,10 +39,12 @@ class Array : public std::enable_shared_from_this<Array> {
   int nelements();
   std::shared_ptr<Array> operator[](int index);
   std::shared_ptr<Array> slice(const std::vector<Slice>& slices);
+  std::shared_ptr<Array> index(const std::vector<std::shared_ptr<Array>>& indices);
   void calculate_strides(const std::vector<int>& shape, std::vector<int>& strides);
   void print(const std::string& indent = "");
 };
 
+std::shared_ptr<Array> array_arange(float start, float stop, float step = 1);
 std::shared_ptr<Array> array_from_vector(const std::vector<float>& data, const std::vector<int>& shape);
 std::shared_ptr<Array> broadcast_op(const std::shared_ptr<Array>& a, const std::shared_ptr<Array>& b, bool assign, std::function<float(float, float)> op);
 std::shared_ptr<Array> operator*(const std::shared_ptr<Array>& a, const std::shared_ptr<Array>& b);
@@ -59,10 +61,12 @@ std::shared_ptr<Array> operator-(const std::shared_ptr<Array>& a, const std::sha
 std::shared_ptr<Array> operator-(const std::shared_ptr<Array>& a, float b);
 std::shared_ptr<Array> operator-(float a, const std::shared_ptr<Array>& b);
 std::shared_ptr<Array> map_function(const std::shared_ptr<Array>& a, std::function<float(const std::vector<int>&, float)> op);
-std::shared_ptr<Array> tanhf(const std::shared_ptr<Array>& a);
-std::shared_ptr<Array> expf(const std::shared_ptr<Array>& a);
-std::shared_ptr<Array> powf(const std::shared_ptr<Array>& a, float b);
+std::shared_ptr<Array> tanh(const std::shared_ptr<Array>& a);
+std::shared_ptr<Array> exp(const std::shared_ptr<Array>& a);
+std::shared_ptr<Array> log(const std::shared_ptr<Array>& a);
+std::shared_ptr<Array> pow(const std::shared_ptr<Array>& a, float b);
 std::shared_ptr<Array> one_hot(const std::shared_ptr<Array>& x, int num_classes = -1);
 std::shared_ptr<Array> sum(const std::shared_ptr<Array>& a, const std::vector<int>& dims = {});
+std::shared_ptr<Array> mean(const std::shared_ptr<Array>& a, const std::vector<int>& dims = {});
 std::shared_ptr<Array> multiply_transpose(const std::shared_ptr<Array>& a, bool a_transpose, const std::shared_ptr<Array>& b, bool b_transpose);
 std::shared_ptr<Array> operator%(const std::shared_ptr<Array>& a, const std::shared_ptr<Array>& b);

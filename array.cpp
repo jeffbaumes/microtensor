@@ -64,6 +64,33 @@ std::shared_ptr<Array> Array::slice(const std::vector<Slice>& slices) {
   return std::make_shared<Array>(shared_from_this(), offset, newShape, newStrides);
 }
 
+std::shared_ptr<Array> Array::index(const std::vector<std::shared_ptr<Array>>& indices) {
+  if (indices.size() != shape.size()) {
+    throw std::invalid_argument("Index list size must match the number of dimensions.");
+  }
+  int size = -1;
+  for (auto& index : indices) {
+    if (index->shape.size() != 1) {
+      throw std::invalid_argument("All indices must be one-dimensional.");
+    }
+    if (index->shape[0] != indices[0]->shape[0]) {
+      throw std::invalid_argument("All indices must have the same size.");
+    }
+  }
+
+  std::vector<float> result_data(indices[0]->shape[0]);
+  for (int i = 0; i < indices[0]->shape[0]; ++i) {
+    size_t linearIndex = 0;
+    for (size_t dim = 0; dim < indices.size(); ++dim) {
+      linearIndex += indices[dim]->data[i*indices[dim]->strides[0]] * strides[dim];
+    }
+    assert(linearIndex < data.size());
+    assert(i < result_data.size());
+    result_data[i] = data[linearIndex];
+  }
+  return array_from_vector(result_data, {indices[0]->shape[0]});
+}
+
 void Array::calculate_strides(const std::vector<int>& shape, std::vector<int>& strides) {
   strides.resize(shape.size());
   int stride = 1;
@@ -98,6 +125,14 @@ void Array::print(const std::string& indent) {
   if (indent.length() == 0) {
     std::cout << "\n";
   }
+}
+
+std::shared_ptr<Array> array_arange(float start, float stop, float step) {
+  std::vector<float> data;
+  for (float i = start; i < stop; i += step) {
+    data.push_back(i);
+  }
+  return array_from_vector(data, {static_cast<int>(data.size())});
 }
 
 std::shared_ptr<Array> array_from_vector(const std::vector<float>& data, const std::vector<int>& shape) {
@@ -136,15 +171,19 @@ std::shared_ptr<Array> map_function(const std::shared_ptr<Array>& a, std::functi
   return std::make_shared<Array>(result, a_shape);
 }
 
-std::shared_ptr<Array> tanhf(const std::shared_ptr<Array>& a) {
+std::shared_ptr<Array> tanh(const std::shared_ptr<Array>& a) {
   return map_function(a, [](const std::vector<int>&, float x) { return std::tanh(x); });
 }
 
-std::shared_ptr<Array> expf(const std::shared_ptr<Array>& a) {
+std::shared_ptr<Array> exp(const std::shared_ptr<Array>& a) {
   return map_function(a, [](const std::vector<int>&, float x) { return std::exp(x); });
 }
 
-std::shared_ptr<Array> powf(const std::shared_ptr<Array>& a, float b) {
+std::shared_ptr<Array> log(const std::shared_ptr<Array>& a) {
+  return map_function(a, [](const std::vector<int>&, float x) { return std::log(x); });
+}
+
+std::shared_ptr<Array> pow(const std::shared_ptr<Array>& a, float b) {
   return map_function(a, [b](const std::vector<int>&, float x) { return std::pow(x, b); });
 }
 
@@ -221,15 +260,15 @@ std::shared_ptr<Array> operator*(float a, const std::shared_ptr<Array>& b) {
 }
 
 std::shared_ptr<Array> operator/(const std::shared_ptr<Array>& a, const std::shared_ptr<Array>& b) {
-  return a * powf(b, -1.0f);
+  return a * pow(b, -1.0f);
 }
 
 std::shared_ptr<Array> operator/(const std::shared_ptr<Array>& a, float b) {
-  return a * powf(b, -1.0f);
+  return a * std::pow(b, -1.0f);
 }
 
 std::shared_ptr<Array> operator/(float a, const std::shared_ptr<Array>& b) {
-  return a * powf(b, -1.0f);
+  return a * pow(b, -1.0f);
 }
 
 std::shared_ptr<Array> operator+(const std::shared_ptr<Array>& a, const std::shared_ptr<Array>& b) {
@@ -262,8 +301,8 @@ std::shared_ptr<Array> operator-(float a, const std::shared_ptr<Array>& b) {
 
 std::shared_ptr<Array> one_hot(const std::shared_ptr<Array>& x, int num_classes) {
   if (num_classes == -1) {
-    std::unordered_set<float> unique_values;
     int nelements = x->nelements();
+    int maximum = 0;
     for (int i = 0; i < nelements; i += 1) {
       size_t remainder = i;
       std::vector<int> inputIndices(x->shape.size(), 0);
@@ -275,24 +314,20 @@ std::shared_ptr<Array> one_hot(const std::shared_ptr<Array>& x, int num_classes)
       for (size_t dim = 0; dim < inputIndices.size(); ++dim) {
         inputFlatIndex += inputIndices[dim] * x->strides[dim];
       }
-      unique_values.insert(x->data[inputFlatIndex]);
+      maximum = std::max(maximum, static_cast<int>(x->data[inputFlatIndex]));
     }
-    num_classes = unique_values.size();
+    num_classes = maximum + 1;
   }
   auto shape = x->shape;
   shape.push_back(num_classes);
   auto result_data = std::vector<float>(std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>()), 0.0f);
-  std::map<float, int> encoding;
   int nelements = x->nelements();
   for (int i = 0; i < nelements; i += 1) {
-    float value = x->data[i];
-    if (encoding.find(value) == encoding.end()) {
-      encoding[value] = encoding.size();
+    int value = static_cast<int>(x->data[i]);
+    if (value > num_classes - 1) {
+      throw std::runtime_error("Maximum value in x exceeds num_classes - 1");
     }
-    if (encoding.size() > num_classes) {
-      throw std::runtime_error("Number of unique values in x exceeds num_classes");
-    }
-    result_data[i * num_classes + encoding[value]] = 1;
+    result_data[i * num_classes + value] = 1;
   }
   return std::make_shared<Array>(result_data, shape);
 }
@@ -351,6 +386,17 @@ std::shared_ptr<Array> sum(const std::shared_ptr<Array>& a, const std::vector<in
   }
 
   return array_from_vector(resultData, resultShape);
+}
+
+std::shared_ptr<Array> mean(const std::shared_ptr<Array>& a, const std::vector<int>& dims) {
+  if (dims.empty()) {
+    return sum(a) / a->nelements();
+  }
+  float divisor = 1.0f;
+  for (int i = 0; i < dims.size(); ++i) {
+    divisor *= a->shape[i];
+  }
+  return sum(a, dims) / divisor;
 }
 
 std::shared_ptr<Array> multiply_transpose(const std::shared_ptr<Array>& a, bool a_transpose, const std::shared_ptr<Array>& b, bool b_transpose) {

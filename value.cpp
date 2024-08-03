@@ -104,8 +104,8 @@ std::shared_ptr<Value> operator*(float a, const std::shared_ptr<Value>& b) {
   return std::make_shared<Value>(a) * b;
 }
 
-std::shared_ptr<Value> tanhf(const std::shared_ptr<Value>& a) {
-  auto result = std::make_shared<Value>(tanhf(a->data));
+std::shared_ptr<Value> tanh(const std::shared_ptr<Value>& a) {
+  auto result = std::make_shared<Value>(std::tanh(a->data));
   result->children = {a};
   result->backprop = [a, result]() {
     a->grad += result->grad * (1.0f - result->data * result->data);
@@ -113,8 +113,8 @@ std::shared_ptr<Value> tanhf(const std::shared_ptr<Value>& a) {
   return result;
 }
 
-std::shared_ptr<Value> expf(const std::shared_ptr<Value>& a) {
-  auto result = std::make_shared<Value>(expf(a->data));
+std::shared_ptr<Value> exp(const std::shared_ptr<Value>& a) {
+  auto result = std::make_shared<Value>(std::exp(a->data));
   result->children = {a};
   result->backprop = [a, result]() {
     a->grad += result->grad * result->data;
@@ -122,17 +122,17 @@ std::shared_ptr<Value> expf(const std::shared_ptr<Value>& a) {
   return result;
 }
 
-std::shared_ptr<Value> powf(const std::shared_ptr<Value>& a, float b) {
-  auto result = std::make_shared<Value>(powf(a->data, b));
+std::shared_ptr<Value> pow(const std::shared_ptr<Value>& a, float b) {
+  auto result = std::make_shared<Value>(std::pow(a->data, b));
   result->children = {a};
   result->backprop = [a, b, result]() {
-    a->grad += result->grad * (b * powf(a->data, b - 1.0f));
+    a->grad += result->grad * (b * std::pow(a->data, b - 1.0f));
   };
   return result;
 }
 
 std::shared_ptr<Value> operator/(const std::shared_ptr<Value>& a, const std::shared_ptr<Value>& b) {
-  return a * powf(b, -1.0f);
+  return a * pow(b, -1.0f);
 }
 
 std::shared_ptr<Value> operator/(const std::shared_ptr<Value>& a, float b) {
@@ -163,7 +163,7 @@ std::shared_ptr<Value> Neuron::operator()(const std::vector<std::shared_ptr<Valu
   for (int i = 0; i < inputs.size(); ++i) {
     sum = sum + inputs[i] * weights[i];
   }
-  return tanhf(sum);
+  return tanh(sum);
 }
 
 Layer::Layer(int numInputs, int numNeurons) {

@@ -41,9 +41,9 @@ std::shared_ptr<Value> operator*(float a, const std::shared_ptr<Value>& b);
 std::shared_ptr<Value> operator/(const std::shared_ptr<Value>& a, const std::shared_ptr<Value>& b);
 std::shared_ptr<Value> operator/(const std::shared_ptr<Value>& a, float b);
 std::shared_ptr<Value> operator/(float a, const std::shared_ptr<Value>& b);
-std::shared_ptr<Value> tanhf(const std::shared_ptr<Value>& a);
-std::shared_ptr<Value> expf(const std::shared_ptr<Value>& a);
-std::shared_ptr<Value> powf(const std::shared_ptr<Value>& a, float b);
+std::shared_ptr<Value> tanh(const std::shared_ptr<Value>& a);
+std::shared_ptr<Value> exp(const std::shared_ptr<Value>& a);
+std::shared_ptr<Value> pow(const std::shared_ptr<Value>& a, float b);
 
 class Neuron {
 public:

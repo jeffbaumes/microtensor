@@ -3,6 +3,9 @@ project(microtensor VERSION 1.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+# add_compile_options(-fsanitize=address)
+# set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
+
 add_library(microtensor_lib array.cpp tensor.cpp)
 
 add_executable(lesson-01 lesson-01.cpp)
