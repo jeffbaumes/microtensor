@@ -28,6 +28,19 @@ int Array::nelements() {
   return std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>());
 }
 
+std::shared_ptr<Array> Array::view(const std::vector<int>& view_shape) {
+  if (std::accumulate(view_shape.begin(), view_shape.end(), 1, std::multiplies<int>()) != nelements()) {
+    throw std::invalid_argument("Shape must have the same number of elements as the original array.");
+  }
+  std::vector<int> view_strides(view_shape.size());
+  int stride = strides[strides.size() - 1];
+  for (int i = view_shape.size() - 1; i >= 0; --i) {
+    view_strides[i] = stride;
+    stride *= view_shape[i];
+  }
+  return std::make_shared<Array>(shared_from_this(), 0, view_shape, view_strides);
+}
+
 std::shared_ptr<Array> Array::operator[](int index) {
   int offset = index * strides[0];
   if (shape.size() == 1) {
@@ -65,30 +78,53 @@ std::shared_ptr<Array> Array::slice(const std::vector<Slice>& slices) {
 }
 
 std::shared_ptr<Array> Array::index(const std::vector<std::shared_ptr<Array>>& indices) {
-  if (indices.size() != shape.size()) {
-    throw std::invalid_argument("Index list size must match the number of dimensions.");
+  if (indices.empty()) {
+    throw std::invalid_argument("Index list must not be empty.");
   }
-  int size = -1;
+  if (indices.size() > shape.size()) {
+    throw std::invalid_argument("Index list size must be at most the number of dimensions.");
+  }
   for (auto& index : indices) {
-    if (index->shape.size() != 1) {
-      throw std::invalid_argument("All indices must be one-dimensional.");
-    }
-    if (index->shape[0] != indices[0]->shape[0]) {
+    if (index->shape != indices[0]->shape) {
       throw std::invalid_argument("All indices must have the same size.");
     }
   }
 
-  std::vector<float> result_data(indices[0]->shape[0]);
-  for (int i = 0; i < indices[0]->shape[0]; ++i) {
-    size_t linearIndex = 0;
-    for (size_t dim = 0; dim < indices.size(); ++dim) {
-      linearIndex += indices[dim]->data[i*indices[dim]->strides[0]] * strides[dim];
-    }
-    assert(linearIndex < data.size());
-    assert(i < result_data.size());
-    result_data[i] = data[linearIndex];
+  // result_shape = [...indices[*]->shape, ...shape[indices.size():]]
+  std::vector<int> result_shape(indices[0]->shape);
+  for (size_t i = indices.size(); i < shape.size(); ++i) {
+    result_shape.push_back(shape[i]);
   }
-  return array_from_vector(result_data, {indices[0]->shape[0]});
+
+  // Iterate over all indices and insert a copy of the sub-data at each location
+  std::vector<float> result_data;
+  int index_elements = std::accumulate(indices[0]->shape.begin(), indices[0]->shape.end(), 1, std::multiplies<int>());
+  int lookup_elements = std::accumulate(shape.begin() + indices.size(), shape.end(), 1, std::multiplies<int>());
+  for (int i = 0; i < index_elements; i += 1) {
+    size_t this_data_index = 0;
+    for (size_t indices_index = 0; indices_index < indices.size(); ++indices_index) {
+      auto index = indices[indices_index];
+      size_t index_data_index = 0;
+      size_t remainder = i;
+      for (size_t dim = 0; dim < index->shape.size(); ++dim) {
+        size_t dim_index = remainder / std::accumulate(index->shape.begin() + dim + 1, index->shape.end(), 1, std::multiplies<int>());
+        remainder %= std::accumulate(index->shape.begin() + dim + 1, index->shape.end(), 1, std::multiplies<int>());
+        index_data_index += dim_index * index->strides[dim];
+      }
+      this_data_index += index->data[index_data_index] * strides[indices_index];
+    }
+    for (int j = 0; j < lookup_elements; j += 1) {
+      size_t this_data_offset = 0;
+      size_t remainder = j;
+      for (size_t dim = indices.size(); dim < shape.size(); ++dim) {
+        size_t dim_index = remainder / strides[dim];
+        remainder %= strides[dim];
+        this_data_offset += dim_index * strides[dim];
+      }
+      result_data.push_back(data[this_data_index + this_data_offset]);
+    }
+  }
+  return array_from_vector(result_data, result_shape);
 }
 
 void Array::calculate_strides(const std::vector<int>& shape, std::vector<int>& strides) {
@@ -419,7 +455,9 @@ std::shared_ptr<Array> multiply_transpose(const std::shared_ptr<Array>& a, bool 
     for (int j = 0; j < p; ++j) {
       float dotProduct = 0;
       for (int k = 0; k < n; ++k) {
+        assert((a_transpose ? k * a_stride0 + i * a_stride1 : i * a_stride0 + k * a_stride1) < a_data.size());
         float a_val = a_transpose ? a_data[k * a_stride0 + i * a_stride1] : a_data[i * a_stride0 + k * a_stride1];
+        assert((b_transpose ? j * b_stride0 + k * b_stride1 : k * b_stride0 + j * b_stride1) < b_data.size());
         float b_val = b_transpose ? b_data[j * b_stride0 + k * b_stride1] : b_data[k * b_stride0 + j * b_stride1];
         dotProduct += a_val * b_val;
       }

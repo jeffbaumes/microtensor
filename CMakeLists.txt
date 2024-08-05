@@ -13,3 +13,6 @@ target_link_libraries(lesson-01 microtensor_lib)
 
 add_executable(lesson-02 lesson-02.cpp)
 target_link_libraries(lesson-02 microtensor_lib)
+
+add_executable(lesson-03 lesson-03.cpp)
+target_link_libraries(lesson-03 microtensor_lib)

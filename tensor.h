@@ -23,6 +23,7 @@ class Tensor : public std::enable_shared_from_this<Tensor> {
   Tensor(const std::shared_ptr<Array>& data, const std::vector<std::shared_ptr<Tensor>>& children, std::function<void()> backprop);
 
   int nelements();
+  std::shared_ptr<Tensor> view(const std::vector<int>& shape);
   std::shared_ptr<Tensor> operator[](int index);
   std::shared_ptr<Tensor> index(const std::vector<std::shared_ptr<Tensor>>& indices);
   std::shared_ptr<Tensor> slice(const std::vector<Slice>& slices);
@@ -60,6 +61,8 @@ std::shared_ptr<Tensor> operator-(const std::shared_ptr<Tensor>& a, float b);
 std::shared_ptr<Tensor> operator-(float a, const std::shared_ptr<Tensor>& b);
 std::shared_ptr<Tensor> operator%(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b);
 std::shared_ptr<Tensor> squeeze(const std::shared_ptr<Tensor>& x);
+std::shared_ptr<Tensor> cross_entropy(const std::shared_ptr<Tensor>& logits, const std::shared_ptr<Tensor>& target);
+std::shared_ptr<Tensor> softmax(const std::shared_ptr<Tensor>& logits);
 
 template <typename Engine>
 std::shared_ptr<Tensor> multinomial(const std::shared_ptr<Tensor>& probs, Engine& engine) {
@@ -83,6 +86,16 @@ std::shared_ptr<Tensor> randn(const std::vector<int>& shape, Engine& engine) {
   std::vector<float> data(std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>()));
   for (auto& val : data) {
     val = distribution(engine);
+  }
+  return from_vector(data, shape);
+}
+
+template <typename Engine>
+std::shared_ptr<Tensor> randint(int low, int high, const std::vector<int>& shape, Engine& engine) {
+  auto dist = std::uniform_int_distribution<int>(low, high - 1);
+  auto data = std::vector<float>(std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>()));
+  for (int i = 0; i < data.size(); i += 1) {
+    data[i] = dist(engine);
   }
   return from_vector(data, shape);
 }

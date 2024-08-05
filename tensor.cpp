@@ -10,25 +10,49 @@ int Tensor::nelements() {
   return data->nelements();
 }
 
+std::shared_ptr<Tensor> Tensor::view(const std::vector<int>& shape) {
+  auto result = from_array(data->view(shape));
+  result->children = {shared_from_this()};
+  std::weak_ptr<Tensor> result_weak = result;
+  result->backprop = [this, result_weak]() {
+    auto result = result_weak.lock();
+    if (!result) {
+      throw std::runtime_error("one of the tensors is null");
+    }
+    grad = grad + result->grad->view(data->shape);
+  };
+  return result;
+}
+
 // TODO: Needs backprop function
 std::shared_ptr<Tensor> Tensor::operator[](int index) {
   return from_array((*data)[index]);
 }
 
 std::shared_ptr<Tensor> Tensor::index(const std::vector<std::shared_ptr<Tensor>>& indices) {
-  std::vector<std::shared_ptr<Array>> dataIndices;
+  std::vector<std::shared_ptr<Array>> array_indices;
   for (auto& index : indices) {
-    dataIndices.push_back(index->data);
+    array_indices.push_back(index->data);
   }
-  auto result = from_array(data->index(dataIndices));
+  auto result = from_array(data->index(array_indices));
   result->children = {shared_from_this()};
-  result->backprop = [this, dataIndices, result]() {
-    for (int i = 0; i < dataIndices[0]->shape[0]; ++i) {
+
+  std::weak_ptr<Tensor> result_weak = result;
+
+  // TODO: backprop assumes indices are N one-dimensional arrays, where N is the dim of the tensor.
+  // Should generalize to M arbitrary dimensional index arrays (all of same shape), where M <= N.
+  // Forward pass already implements this.
+  result->backprop = [this, array_indices, result_weak]() {
+    auto result = result_weak.lock();
+    if (!result) {
+      throw std::runtime_error("one of the tensors is null");
+    }
+    for (int i = 0; i < array_indices[0]->shape[0]; ++i) {
       size_t linearIndex = 0;
-      for (size_t dim = 0; dim < dataIndices.size(); ++dim) {
-        assert(i*dataIndices[dim]->strides[0] < dataIndices[dim]->data.size());
+      for (size_t dim = 0; dim < array_indices.size(); ++dim) {
+        assert(i*array_indices[dim]->strides[0] < array_indices[dim]->data.size());
         assert(dim < grad->strides.size());
-        linearIndex += dataIndices[dim]->data[i*dataIndices[dim]->strides[0]] * grad->strides[dim];
+        linearIndex += array_indices[dim]->data[i*array_indices[dim]->strides[0]] * grad->strides[dim];
       }
       assert(linearIndex < grad->data.size());
       assert(i < result->grad->data.size());
@@ -109,7 +133,14 @@ std::shared_ptr<Tensor> from_array(const std::shared_ptr<Array>& data) {
 std::shared_ptr<Tensor> tanh(const std::shared_ptr<Tensor>& a) {
   auto result = from_array(tanh(a->data));
   result->children = {a};
-  result->backprop = [a, result]() {
+  std::weak_ptr<Tensor> a_weak = a;
+  std::weak_ptr<Tensor> result_weak = result;
+  result->backprop = [a_weak, result_weak]() {
+    auto a = a_weak.lock();
+    auto result = result_weak.lock();
+    if (!a || !result) {
+      throw std::runtime_error("one of the tensors is null");
+    }
     a->grad = a->grad + result->grad * (1.0f - result->data * result->data);
   };
   return result;
@@ -118,7 +149,14 @@ std::shared_ptr<Tensor> tanh(const std::shared_ptr<Tensor>& a) {
 std::shared_ptr<Tensor> exp(const std::shared_ptr<Tensor>& a) {
   auto result = from_array(exp(a->data));
   result->children = {a};
-  result->backprop = [a, result]() {
+  std::weak_ptr<Tensor> a_weak = a;
+  std::weak_ptr<Tensor> result_weak = result;
+  result->backprop = [a_weak, result_weak]() {
+    auto a = a_weak.lock();
+    auto result = result_weak.lock();
+    if (!a || !result) {
+      throw std::runtime_error("one of the tensors is null");
+    }
     a->grad = a->grad + result->grad * result->data;
   };
   return result;
@@ -127,7 +165,14 @@ std::shared_ptr<Tensor> exp(const std::shared_ptr<Tensor>& a) {
 std::shared_ptr<Tensor> log(const std::shared_ptr<Tensor>& a) {
   auto result = from_array(log(a->data));
   result->children = {a};
-  result->backprop = [a, result]() {
+  std::weak_ptr<Tensor> a_weak = a;
+  std::weak_ptr<Tensor> result_weak = result;
+  result->backprop = [a_weak, result_weak]() {
+    auto a = a_weak.lock();
+    auto result = result_weak.lock();
+    if (!a || !result) {
+      throw std::runtime_error("one of the tensors is null");
+    }
     // Assumes a->data is positive
     a->grad = a->grad + result->grad * (1.0f / a->data);
   };
@@ -137,7 +182,14 @@ std::shared_ptr<Tensor> log(const std::shared_ptr<Tensor>& a) {
 std::shared_ptr<Tensor> pow(const std::shared_ptr<Tensor>& a, float b) {
   auto result = from_array(pow(a->data, b));
   result->children = {a};
-  result->backprop = [a, result, b]() {
+  std::weak_ptr<Tensor> a_weak = a;
+  std::weak_ptr<Tensor> result_weak = result;
+  result->backprop = [a_weak, result_weak, b]() {
+    auto a = a_weak.lock();
+    auto result = result_weak.lock();
+    if (!a || !result) {
+      throw std::runtime_error("one of the tensors is null");
+    }
     a->grad = a->grad + result->grad * b * pow(a->data, b - 1.0f);
   };
   return result;
@@ -151,7 +203,14 @@ std::shared_ptr<Tensor> one_hot(const std::shared_ptr<Tensor>& x, int num_classe
 std::shared_ptr<Tensor> sum(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims) {
   auto result = from_array(sum(a->data, dims));
   result->children = {a};
-  result->backprop = [a, result]() {
+  std::weak_ptr<Tensor> a_weak = a;
+  std::weak_ptr<Tensor> result_weak = result;
+  result->backprop = [a_weak, result_weak]() {
+    auto a = a_weak.lock();
+    auto result = result_weak.lock();
+    if (!a || !result) {
+      throw std::runtime_error("one of the tensors is null");
+    }
     broadcast_op(a->grad, result->grad, true, std::plus<float>());
   };
   return result;
@@ -171,7 +230,16 @@ std::shared_ptr<Tensor> mean(const std::shared_ptr<Tensor>& a, const std::vector
 std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
   auto result = from_array(a->data * b->data);
   result->children = {a, b};
-  result->backprop = [a, b, result]() {
+  std::weak_ptr<Tensor> a_weak = a;
+  std::weak_ptr<Tensor> b_weak = b;
+  std::weak_ptr<Tensor> result_weak = result;
+  result->backprop = [a_weak, b_weak, result_weak]() {
+    auto a = a_weak.lock();
+    auto b = b_weak.lock();
+    auto result = result_weak.lock();
+    if (!a || !b || !result) {
+      throw std::runtime_error("one of the tensors is null");
+    }
     // a->grad = a->grad + result->grad * b->data;
     // b->grad = b->grad + result->grad * a->data;
     auto b_mult = broadcast_op(result->grad, b->data, false, std::multiplies<float>());
@@ -205,7 +273,16 @@ std::shared_ptr<Tensor> operator/(float a, const std::shared_ptr<Tensor>& b) {
 std::shared_ptr<Tensor> operator+(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
   auto result = from_array(a->data + b->data);
   result->children = {a, b};
-  result->backprop = [a, b, result]() {
+  std::weak_ptr<Tensor> a_weak = a;
+  std::weak_ptr<Tensor> b_weak = b;
+  std::weak_ptr<Tensor> result_weak = result;
+  result->backprop = [a_weak, b_weak, result_weak]() {
+    auto a = a_weak.lock();
+    auto b = b_weak.lock();
+    auto result = result_weak.lock();
+    if (!a || !b || !result) {
+      throw std::runtime_error("one of the tensors is null");
+    }
     broadcast_op(a->grad, result->grad, true, std::plus<float>());
     broadcast_op(b->grad, result->grad, true, std::plus<float>());
   };
@@ -240,11 +317,36 @@ std::shared_ptr<Tensor> operator-(float a, const std::shared_ptr<Tensor>& b) {
 std::shared_ptr<Tensor> operator%(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
   auto result = from_array(a->data % b->data);
   result->children = {a, b};
-  result->backprop = [a, b, result]() {
+  std::weak_ptr<Tensor> a_weak = a;
+  std::weak_ptr<Tensor> b_weak = b;
+  std::weak_ptr<Tensor> result_weak = result;
+  result->backprop = [a_weak, b_weak, result_weak]() {
+    auto a = a_weak.lock();
+    auto b = b_weak.lock();
+    auto result = result_weak.lock();
+    if (!a || !b || !result) {
+      throw std::runtime_error("one of the tensors is null");
+    }
     a->grad = a->grad + multiply_transpose(result->grad, false, b->data, true);
     b->grad = b->grad + multiply_transpose(a->data, true, result->grad, false);
   };
   return result;
+}
+
+std::shared_ptr<Tensor> squeeze(const std::shared_ptr<Tensor>& x) {
+  return from_array(squeeze(x->data));
+}
+
+std::shared_ptr<Tensor> cross_entropy(const std::shared_ptr<Tensor>& logits, const std::shared_ptr<Tensor>& target) {
+  auto counts = exp(logits);
+  auto probs = counts / sum(counts, {1});
+  auto loss = -mean(log(probs->index({arange(0, logits->data->shape[0]), target})));
+  return loss;
+}
+
+std::shared_ptr<Tensor> softmax(const std::shared_ptr<Tensor>& logits) {
+  auto counts = exp(logits);
+  return counts / sum(counts, {1});
 }
 
 std::shared_ptr<Tensor> zeros(const std::vector<int>& shape) {
@@ -267,8 +369,4 @@ std::shared_ptr<Tensor> MLP::operator()(const std::shared_ptr<Tensor>& inputs) {
     outputs = layers[i](outputs);
   }
   return outputs;
-}
-
-std::shared_ptr<Tensor> squeeze(const std::shared_ptr<Tensor>& x) {
-  return from_array(squeeze(x->data));
 }
