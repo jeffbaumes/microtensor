@@ -24,12 +24,29 @@ Array::Array(
     shape(shape),
     strides(strides) {}
 
-int Array::nelements() {
+int Array::nelement() {
   return std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>());
 }
 
-std::shared_ptr<Array> Array::view(const std::vector<int>& view_shape) {
-  if (std::accumulate(view_shape.begin(), view_shape.end(), 1, std::multiplies<int>()) != nelements()) {
+std::shared_ptr<Array> Array::view(const std::vector<int>& desired_shape) {
+  auto view_shape = desired_shape;
+  bool filled = false;
+  for (int i = 0; i < view_shape.size(); ++i) {
+    if (view_shape[i] == -1) {
+      if (filled) {
+        throw std::invalid_argument("Only one dimension can be inferred.");
+      }
+      int inferred = nelement();
+      for (int j = 0; j < view_shape.size(); ++j) {
+        if (j != i) {
+          inferred /= view_shape[j];
+        }
+      }
+      view_shape[i] = inferred;
+      filled = true;
+    }
+  }
+  if (std::accumulate(view_shape.begin(), view_shape.end(), 1, std::multiplies<int>()) != nelement()) {
     throw std::invalid_argument("Shape must have the same number of elements as the original array.");
   }
   std::vector<int> view_strides(view_shape.size());
@@ -180,7 +197,7 @@ std::shared_ptr<Array> map_function(const std::shared_ptr<Array>& a, std::functi
   auto a_data = a->data;
   auto a_strides = a->strides;
 
-  size_t nelements = a->nelements();
+  size_t nelement = a->nelement();
 
   std::vector<int> index(a_shape.size(), 0);
 
@@ -190,9 +207,9 @@ std::shared_ptr<Array> map_function(const std::shared_ptr<Array>& a, std::functi
     dim_products[dim] = std::accumulate(a_shape.begin() + dim + 1, a_shape.end(), 1, std::multiplies<int>());
   }
 
-  std::vector<float> result(nelements);
+  std::vector<float> result(nelement);
 
-  for (size_t i = 0; i < nelements; ++i) {
+  for (size_t i = 0; i < nelement; ++i) {
     size_t a_index = 0;
     size_t remainder = i;
     for (size_t dim = 0; dim < a_shape.size(); ++dim) {
@@ -221,6 +238,10 @@ std::shared_ptr<Array> log(const std::shared_ptr<Array>& a) {
 
 std::shared_ptr<Array> pow(const std::shared_ptr<Array>& a, float b) {
   return map_function(a, [b](const std::vector<int>&, float x) { return std::pow(x, b); });
+}
+
+std::shared_ptr<Array> sqrt(const std::shared_ptr<Array>& a) {
+  return map_function(a, [](const std::vector<int>&, float x) { return std::sqrt(x); });
 }
 
 std::shared_ptr<Array> broadcast_op(const std::shared_ptr<Array>& a, const std::shared_ptr<Array>& b, bool assign, std::function<float(float, float)> op) {
@@ -337,9 +358,9 @@ std::shared_ptr<Array> operator-(float a, const std::shared_ptr<Array>& b) {
 
 std::shared_ptr<Array> one_hot(const std::shared_ptr<Array>& x, int num_classes) {
   if (num_classes == -1) {
-    int nelements = x->nelements();
+    int nelement = x->nelement();
     int maximum = 0;
-    for (int i = 0; i < nelements; i += 1) {
+    for (int i = 0; i < nelement; i += 1) {
       size_t remainder = i;
       std::vector<int> inputIndices(x->shape.size(), 0);
       for (size_t dim = 0; dim < x->shape.size(); ++dim) {
@@ -357,8 +378,8 @@ std::shared_ptr<Array> one_hot(const std::shared_ptr<Array>& x, int num_classes)
   auto shape = x->shape;
   shape.push_back(num_classes);
   auto result_data = std::vector<float>(std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>()), 0.0f);
-  int nelements = x->nelements();
-  for (int i = 0; i < nelements; i += 1) {
+  int nelement = x->nelement();
+  for (int i = 0; i < nelement; i += 1) {
     int value = static_cast<int>(x->data[i]);
     if (value > num_classes - 1) {
       throw std::runtime_error("Maximum value in x exceeds num_classes - 1");
@@ -426,13 +447,18 @@ std::shared_ptr<Array> sum(const std::shared_ptr<Array>& a, const std::vector<in
 
 std::shared_ptr<Array> mean(const std::shared_ptr<Array>& a, const std::vector<int>& dims) {
   if (dims.empty()) {
-    return sum(a) / a->nelements();
+    return sum(a) / a->nelement();
   }
   float divisor = 1.0f;
   for (int i = 0; i < dims.size(); ++i) {
     divisor *= a->shape[i];
   }
   return sum(a, dims) / divisor;
+}
+
+std::shared_ptr<Array> variance(const std::shared_ptr<Array>& a, const std::vector<int>& dims) {
+  auto x_mean = mean(a, dims);
+  return mean(pow(a - x_mean, 2.0f), dims);
 }
 
 std::shared_ptr<Array> multiply_transpose(const std::shared_ptr<Array>& a, bool a_transpose, const std::shared_ptr<Array>& b, bool b_transpose) {

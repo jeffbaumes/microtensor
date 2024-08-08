@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 # add_compile_options(-fsanitize=address)
 # set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
 
-add_library(microtensor_lib array.cpp tensor.cpp)
+add_library(microtensor_lib array.cpp nn.cpp tensor.cpp)
 
 add_executable(lesson-01 lesson-01.cpp)
 target_link_libraries(lesson-01 microtensor_lib)
@@ -16,3 +16,6 @@ target_link_libraries(lesson-02 microtensor_lib)
 
 add_executable(lesson-03 lesson-03.cpp)
 target_link_libraries(lesson-03 microtensor_lib)
+
+add_executable(lesson-04 lesson-04.cpp)
+target_link_libraries(lesson-04 microtensor_lib)

@@ -1,17 +1,35 @@
 #include "tensor.h"
 
+bool NO_GRAD = false;
+
+bool no_grad() {
+  return NO_GRAD;
+}
+
+NoGrad::NoGrad() : previous(NO_GRAD) {
+  NO_GRAD = true;
+}
+
+NoGrad::~NoGrad() {
+  NO_GRAD = previous;
+}
+
+
 Tensor::Tensor(const std::shared_ptr<Array>& data)
     : data(data), grad() {}
 
 Tensor::Tensor(const std::shared_ptr<Array>& data, const std::vector<std::shared_ptr<Tensor>>& children, std::function<void()> backprop)
     : data(data), grad(), children(children), backprop(backprop) {}
 
-int Tensor::nelements() {
-  return data->nelements();
+int Tensor::nelement() {
+  return data->nelement();
 }
 
 std::shared_ptr<Tensor> Tensor::view(const std::vector<int>& shape) {
   auto result = from_array(data->view(shape));
+  if (NO_GRAD) {
+    return result;
+  }
   result->children = {shared_from_this()};
   std::weak_ptr<Tensor> result_weak = result;
   result->backprop = [this, result_weak]() {
@@ -35,6 +53,9 @@ std::shared_ptr<Tensor> Tensor::index(const std::vector<std::shared_ptr<Tensor>>
     array_indices.push_back(index->data);
   }
   auto result = from_array(data->index(array_indices));
+  if (NO_GRAD) {
+    return result;
+  }
   result->children = {shared_from_this()};
 
   std::weak_ptr<Tensor> result_weak = result;
@@ -72,7 +93,7 @@ void Tensor::print(const std::string& indent) {
 }
 
 void Tensor::init_grad() {
-  int num = nelements();
+  int num = nelement();
   if (!grad) {
     grad = std::make_shared<Array>(std::vector<float>(num), data->shape);
   } else if (grad->shape != data->shape) {
@@ -132,6 +153,9 @@ std::shared_ptr<Tensor> from_array(const std::shared_ptr<Array>& data) {
 
 std::shared_ptr<Tensor> tanh(const std::shared_ptr<Tensor>& a) {
   auto result = from_array(tanh(a->data));
+  if (NO_GRAD) {
+    return result;
+  }
   result->children = {a};
   std::weak_ptr<Tensor> a_weak = a;
   std::weak_ptr<Tensor> result_weak = result;
@@ -148,6 +172,9 @@ std::shared_ptr<Tensor> tanh(const std::shared_ptr<Tensor>& a) {
 
 std::shared_ptr<Tensor> exp(const std::shared_ptr<Tensor>& a) {
   auto result = from_array(exp(a->data));
+  if (NO_GRAD) {
+    return result;
+  }
   result->children = {a};
   std::weak_ptr<Tensor> a_weak = a;
   std::weak_ptr<Tensor> result_weak = result;
@@ -164,6 +191,9 @@ std::shared_ptr<Tensor> exp(const std::shared_ptr<Tensor>& a) {
 
 std::shared_ptr<Tensor> log(const std::shared_ptr<Tensor>& a) {
   auto result = from_array(log(a->data));
+  if (NO_GRAD) {
+    return result;
+  }
   result->children = {a};
   std::weak_ptr<Tensor> a_weak = a;
   std::weak_ptr<Tensor> result_weak = result;
@@ -181,6 +211,9 @@ std::shared_ptr<Tensor> log(const std::shared_ptr<Tensor>& a) {
 
 std::shared_ptr<Tensor> pow(const std::shared_ptr<Tensor>& a, float b) {
   auto result = from_array(pow(a->data, b));
+  if (NO_GRAD) {
+    return result;
+  }
   result->children = {a};
   std::weak_ptr<Tensor> a_weak = a;
   std::weak_ptr<Tensor> result_weak = result;
@@ -195,6 +228,10 @@ std::shared_ptr<Tensor> pow(const std::shared_ptr<Tensor>& a, float b) {
   return result;
 }
 
+std::shared_ptr<Tensor> sqrt(const std::shared_ptr<Tensor>& a) {
+  return pow(a, 0.5f);
+}
+
 std::shared_ptr<Tensor> one_hot(const std::shared_ptr<Tensor>& x, int num_classes) {
   // Note: no backprop for one_hot
   return from_array(one_hot(x->data, num_classes));
@@ -202,6 +239,9 @@ std::shared_ptr<Tensor> one_hot(const std::shared_ptr<Tensor>& x, int num_classe
 
 std::shared_ptr<Tensor> sum(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims) {
   auto result = from_array(sum(a->data, dims));
+  if (NO_GRAD) {
+    return result;
+  }
   result->children = {a};
   std::weak_ptr<Tensor> a_weak = a;
   std::weak_ptr<Tensor> result_weak = result;
@@ -218,17 +258,29 @@ std::shared_ptr<Tensor> sum(const std::shared_ptr<Tensor>& a, const std::vector<
 
 std::shared_ptr<Tensor> mean(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims) {
   if (dims.empty()) {
-    return sum(a) / a->nelements();
+    return sum(a) / a->nelement();
   }
   float divisor = 1.0f;
   for (int i = 0; i < dims.size(); ++i) {
-    divisor *= a->data->shape[i];
+    divisor *= a->data->shape[dims[i]];
   }
   return sum(a, dims) / divisor;
 }
 
+std::shared_ptr<Tensor> variance(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims) {
+  auto x_mean = mean(a, dims);
+  float divisor = 1.0f;
+  for (int i = 0; i < dims.size(); ++i) {
+    divisor *= a->data->shape[dims[i]];
+  }
+  return sum(pow(a - x_mean, 2.0f), dims) / (divisor - 1.0f);
+}
+
 std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
   auto result = from_array(a->data * b->data);
+  if (NO_GRAD) {
+    return result;
+  }
   result->children = {a, b};
   std::weak_ptr<Tensor> a_weak = a;
   std::weak_ptr<Tensor> b_weak = b;
@@ -272,6 +324,9 @@ std::shared_ptr<Tensor> operator/(float a, const std::shared_ptr<Tensor>& b) {
 
 std::shared_ptr<Tensor> operator+(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
   auto result = from_array(a->data + b->data);
+  if (NO_GRAD) {
+    return result;
+  }
   result->children = {a, b};
   std::weak_ptr<Tensor> a_weak = a;
   std::weak_ptr<Tensor> b_weak = b;
@@ -316,6 +371,9 @@ std::shared_ptr<Tensor> operator-(float a, const std::shared_ptr<Tensor>& b) {
 // Matrix multiplication operator
 std::shared_ptr<Tensor> operator%(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
   auto result = from_array(a->data % b->data);
+  if (NO_GRAD) {
+    return result;
+  }
   result->children = {a, b};
   std::weak_ptr<Tensor> a_weak = a;
   std::weak_ptr<Tensor> b_weak = b;
@@ -357,16 +415,4 @@ std::shared_ptr<Tensor> zeros(const std::vector<int>& shape) {
 std::shared_ptr<Tensor> ones(const std::vector<int>& shape) {
   std::vector<float> data(std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>()), 1.0f);
   return from_vector(data, shape);
-}
-
-std::shared_ptr<Tensor> Layer::operator()(const std::shared_ptr<Tensor>& inputs) {
-  return tanh(inputs % W + b);
-}
-
-std::shared_ptr<Tensor> MLP::operator()(const std::shared_ptr<Tensor>& inputs) {
-  auto outputs = inputs;
-  for (int i = 0; i < layers.size(); ++i) {
-    outputs = layers[i](outputs);
-  }
-  return outputs;
 }

@@ -12,6 +12,16 @@
 
 #include "array.h"
 
+bool no_grad();
+
+class NoGrad {
+ public:
+  NoGrad();
+  ~NoGrad();
+ private:
+  bool previous;
+};
+
 class Tensor : public std::enable_shared_from_this<Tensor> {
  public:
   std::shared_ptr<Array> data;
@@ -22,7 +32,7 @@ class Tensor : public std::enable_shared_from_this<Tensor> {
   Tensor(const std::shared_ptr<Array>& data);
   Tensor(const std::shared_ptr<Array>& data, const std::vector<std::shared_ptr<Tensor>>& children, std::function<void()> backprop);
 
-  int nelements();
+  int nelement();
   std::shared_ptr<Tensor> view(const std::vector<int>& shape);
   std::shared_ptr<Tensor> operator[](int index);
   std::shared_ptr<Tensor> index(const std::vector<std::shared_ptr<Tensor>>& indices);
@@ -43,9 +53,11 @@ std::shared_ptr<Tensor> tanh(const std::shared_ptr<Tensor>& a);
 std::shared_ptr<Tensor> exp(const std::shared_ptr<Tensor>& a);
 std::shared_ptr<Tensor> log(const std::shared_ptr<Tensor>& a);
 std::shared_ptr<Tensor> pow(const std::shared_ptr<Tensor>& a, float b);
+std::shared_ptr<Tensor> sqrt(const std::shared_ptr<Tensor>& a);
 std::shared_ptr<Tensor> one_hot(const std::shared_ptr<Tensor>& x, int num_classes = -1);
 std::shared_ptr<Tensor> sum(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims = {});
 std::shared_ptr<Tensor> mean(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims = {});
+std::shared_ptr<Tensor> variance(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims = {});
 std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b);
 std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor>& a, float b);
 std::shared_ptr<Tensor> operator*(float a, const std::shared_ptr<Tensor>& b);
@@ -71,13 +83,13 @@ std::shared_ptr<Tensor> multinomial(const std::shared_ptr<Tensor>& probs, Engine
     throw std::runtime_error("probabilities must be one-dimensional");
   }
   auto u = std::uniform_real_distribution<float>(0, 1)(engine);
-  for (float i = 0; i < p->nelements(); i += 1) {
+  for (float i = 0; i < p->nelement(); i += 1) {
     u -= p->index({from_vector({i}, {1})})->data->data[0];
     if (u <= 0) {
       return from_vector({i}, {1});
     }
   }
-  return from_vector({static_cast<float>(p->nelements() - 1)}, {1});
+  return from_vector({static_cast<float>(p->nelement() - 1)}, {1});
 }
 
 template <typename Engine>
@@ -102,32 +114,3 @@ std::shared_ptr<Tensor> randint(int low, int high, const std::vector<int>& shape
 
 std::shared_ptr<Tensor> zeros(const std::vector<int>& shape);
 std::shared_ptr<Tensor> ones(const std::vector<int>& shape);
-
-class Layer {
- public:
-  template <typename Engine>
-  Layer(int numInputs, int numNeurons, Engine& engine) {
-    W = randn({numInputs, numNeurons}, engine);
-    b = randn({1, numNeurons}, engine);
-  }
-
-  std::shared_ptr<Tensor> operator()(const std::shared_ptr<Tensor>& inputs);
-
-  std::shared_ptr<Tensor> W;
-  std::shared_ptr<Tensor> b;
-};
-
-class MLP {
- public:
-  template <typename Engine>
-  MLP(int numInputs, std::vector<int> numOutputs, Engine& engine) {
-    layers = std::vector<Layer>(numOutputs.size(), Layer(numInputs, numOutputs[0], engine));
-    for (int i = 1; i < numOutputs.size(); ++i) {
-      layers[i] = Layer(numOutputs[i - 1], numOutputs[i], engine);
-    }
-  }
-
-  std::shared_ptr<Tensor> operator()(const std::shared_ptr<Tensor>& inputs);
-
-  std::vector<Layer> layers;
-};

@@ -89,10 +89,10 @@ void mlp() {
   auto b2 = randn({27}, engine);
   auto parameters = std::vector<std::shared_ptr<Tensor>>{C, W1, b1, W2, b2};
 
-  int num_params = std::accumulate(parameters.begin(), parameters.end(), 0, [](auto last, auto p) { return last + p->nelements(); });
+  int num_params = std::accumulate(parameters.begin(), parameters.end(), 0, [](auto last, auto p) { return last + p->nelement(); });
   std::cout << num_params << std::endl;
 
-  int iterations = 10000;
+  int iterations = 100000;
 
   for (int k = 0; k < iterations; k += 1) {
     // Minibatch construct
