@@ -92,6 +92,7 @@ void mlp() {
   int num_params = std::accumulate(parameters.begin(), parameters.end(), 0, [](auto last, auto p) { return last + p->nelement(); });
   std::cout << num_params << std::endl;
 
+  // int iterations = 100000;
   int iterations = 100000;
 
   for (int k = 0; k < iterations; k += 1) {
@@ -142,7 +143,7 @@ void mlp() {
       auto emb = C->index({from_vector(context, {block_size})});
       auto h = tanh(emb->view({1, block_size * embedding_size}) % W1 + b1);
       auto logits = h % W2 + b2;
-      auto probs = softmax(logits);
+      auto probs = softmax(logits, {1});
       auto pred = multinomial(probs, engine);
       float next = pred->data->data[0];
       if (next == 0) {

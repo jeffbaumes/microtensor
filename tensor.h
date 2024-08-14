@@ -55,6 +55,7 @@ std::shared_ptr<Tensor> log(const std::shared_ptr<Tensor>& a);
 std::shared_ptr<Tensor> pow(const std::shared_ptr<Tensor>& a, float b);
 std::shared_ptr<Tensor> sqrt(const std::shared_ptr<Tensor>& a);
 std::shared_ptr<Tensor> one_hot(const std::shared_ptr<Tensor>& x, int num_classes = -1);
+std::shared_ptr<Tensor> max(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims = {});
 std::shared_ptr<Tensor> sum(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims = {});
 std::shared_ptr<Tensor> mean(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims = {});
 std::shared_ptr<Tensor> variance(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims = {});
@@ -74,7 +75,7 @@ std::shared_ptr<Tensor> operator-(float a, const std::shared_ptr<Tensor>& b);
 std::shared_ptr<Tensor> operator%(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b);
 std::shared_ptr<Tensor> squeeze(const std::shared_ptr<Tensor>& x);
 std::shared_ptr<Tensor> cross_entropy(const std::shared_ptr<Tensor>& logits, const std::shared_ptr<Tensor>& target);
-std::shared_ptr<Tensor> softmax(const std::shared_ptr<Tensor>& logits);
+std::shared_ptr<Tensor> softmax(const std::shared_ptr<Tensor>& logits, const std::vector<int>& dims);
 
 template <typename Engine>
 std::shared_ptr<Tensor> multinomial(const std::shared_ptr<Tensor>& probs, Engine& engine) {

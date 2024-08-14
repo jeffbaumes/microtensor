@@ -1,6 +1,9 @@
 #include "array.h"
 
 #include <map>
+#include <immintrin.h>
+// #include <omp.h>
+#include <mkl.h>
 
 Slice::Slice(int start, int stop) : start(start), stop(stop), direct(false) {}
 
@@ -144,7 +147,7 @@ std::shared_ptr<Array> Array::index(const std::vector<std::shared_ptr<Array>>& i
   return array_from_vector(result_data, result_shape);
 }
 
-void Array::calculate_strides(const std::vector<int>& shape, std::vector<int>& strides) {
+void calculate_strides(const std::vector<int>& shape, std::vector<int>& strides) {
   strides.resize(shape.size());
   int stride = 1;
   for (int i = shape.size() - 1; i >= 0; --i) {
@@ -259,6 +262,8 @@ std::shared_ptr<Array> broadcast_op(const std::shared_ptr<Array>& a, const std::
     }
     out_shape[maxDims - 1 - i] = std::max(a_dim, b_dim);
   }
+  std::vector<int> out_strides;
+  calculate_strides(out_shape, out_strides);
 
   // Calculate the total number of elements based on the result shape
   std::vector<float> out_data;
@@ -268,8 +273,8 @@ std::shared_ptr<Array> broadcast_op(const std::shared_ptr<Array>& a, const std::
   }
 
   // Adjust strides for broadcasting
-  std::vector<size_t> a_broadcast_strides(maxDims, 0), b_broadcast_strides(maxDims, 0);
-  for (size_t i = 0; i < maxDims; ++i) {
+  std::vector<int> a_broadcast_strides(maxDims, 0), b_broadcast_strides(maxDims, 0);
+  for (int i = 0; i < maxDims; ++i) {
     if (i < a->shape.size() && a->shape[a->shape.size() - 1 - i] == out_shape[maxDims - 1 - i]) {
       a_broadcast_strides[maxDims - 1 - i] = a->strides[a->shape.size() - 1 - i];
     }
@@ -281,15 +286,10 @@ std::shared_ptr<Array> broadcast_op(const std::shared_ptr<Array>& a, const std::
   for (size_t i = 0; i < totalElements; ++i) {
     size_t indexA = 0, indexB = 0, remainder = i;
     for (size_t dim = 0; dim < maxDims; ++dim) {
-      size_t dimIndex = remainder / std::accumulate(out_shape.begin() + dim + 1, out_shape.end(), 1, std::multiplies<int>());
-      remainder %= std::accumulate(out_shape.begin() + dim + 1, out_shape.end(), 1, std::multiplies<int>());
-
-      if (dim < a->shape.size()) {
-        indexA += dimIndex * a_broadcast_strides[dim];
-      }
-      if (dim < b->shape.size()) {
-        indexB += dimIndex * b_broadcast_strides[dim];
-      }
+      size_t dimIndex = remainder / out_strides[dim];
+      remainder %= out_strides[dim];
+      indexA += dimIndex * a_broadcast_strides[dim];
+      indexB += dimIndex * b_broadcast_strides[dim];
     }
     if (assign) {
       a->data[indexA] = op(a->data[indexA], b->data[indexB]);
@@ -445,21 +445,174 @@ std::shared_ptr<Array> sum(const std::shared_ptr<Array>& a, const std::vector<in
   return array_from_vector(resultData, resultShape);
 }
 
+std::shared_ptr<Array> max(const std::shared_ptr<Array>& a, const std::vector<int>& d) {
+  std::vector<int> dims;
+  if (d.size() == 0) {
+    for (int i = 0; i < a->shape.size(); ++i) {
+      dims.push_back(i);
+    }
+  } else {
+    dims = d;
+  }
+
+  std::vector<int> resultShape = a->shape;
+  for (int dim : dims) {
+    if (dim < resultShape.size()) {
+      resultShape[dim] = 1;
+    }
+  }
+
+  size_t totalResultElements = std::accumulate(resultShape.begin(), resultShape.end(), 1, std::multiplies<size_t>());
+  std::vector<float> resultData(totalResultElements, std::numeric_limits<float>::lowest());
+
+  std::vector<int> resultStrides(a->shape.size(), 0);
+  int stride = 1;
+  for (int i = resultShape.size() - 1; i >= 0; --i) {
+    resultStrides[i] = stride;
+    stride *= resultShape[i];
+  }
+
+  for (size_t linearIndex = 0; linearIndex < a->data.size(); ++linearIndex) {
+    size_t remainder = linearIndex;
+    std::vector<int> inputIndices(a->shape.size(), 0);
+    for (size_t dim = 0; dim < a->shape.size(); ++dim) {
+      inputIndices[dim] = remainder % a->shape[dim];
+      remainder /= a->shape[dim];
+    }
+
+    size_t inputFlatIndex = 0;
+    for (size_t dim = 0; dim < inputIndices.size(); ++dim) {
+      inputFlatIndex += inputIndices[dim] * a->strides[dim];
+    }
+
+    std::vector<int> outputIndices = inputIndices;
+    for (int dim : dims) {
+      outputIndices[dim] = 0; // Set dimensions being summed over to 0
+    }
+
+    size_t resultFlatIndex = 0;
+    for (size_t dim = 0; dim < outputIndices.size(); ++dim) {
+      resultFlatIndex += outputIndices[dim] * resultStrides[dim];
+    }
+
+    resultData[resultFlatIndex] = std::max(resultData[resultFlatIndex], a->data[inputFlatIndex]);
+  }
+
+  return array_from_vector(resultData, resultShape);
+}
+
 std::shared_ptr<Array> mean(const std::shared_ptr<Array>& a, const std::vector<int>& dims) {
-  if (dims.empty()) {
-    return sum(a) / a->nelement();
+  float n = a->nelement();
+  if (!dims.empty()) {
+    n = 1.0f;
+    for (int i = 0; i < dims.size(); ++i) {
+      n *= a->shape[dims[i]];
+    }
   }
-  float divisor = 1.0f;
-  for (int i = 0; i < dims.size(); ++i) {
-    divisor *= a->shape[i];
-  }
-  return sum(a, dims) / divisor;
+  return sum(a, dims) / n;
 }
 
 std::shared_ptr<Array> variance(const std::shared_ptr<Array>& a, const std::vector<int>& dims) {
-  auto x_mean = mean(a, dims);
-  return mean(pow(a - x_mean, 2.0f), dims);
+  float n = a->nelement();
+  if (!dims.empty()) {
+    n = 1.0f;
+    for (int i = 0; i < dims.size(); ++i) {
+      n *= a->shape[dims[i]];
+    }
+  }
+  return sum(pow(a - mean(a, dims), 2.0f), dims) / (n - 1.0f);
 }
+
+// std::shared_ptr<Array> multiply_transpose(const std::shared_ptr<Array>& a, bool a_transpose, const std::shared_ptr<Array>& b, bool b_transpose) {
+//   if (a->shape.size() != 2 || b->shape.size() != 2) {
+//     throw std::invalid_argument("Matrix multiplication requires two 2D tensors.");
+//   }
+//   if (a->shape[a_transpose ? 0 : 1] != b->shape[b_transpose ? 1 : 0]) {
+//     throw std::invalid_argument("Tensor shapes are not compatible for matrix multiplication.");
+//   }
+//   std::vector<float> result;
+//   int m = a->shape[a_transpose ? 1 : 0];
+//   int n = a->shape[a_transpose ? 0 : 1];
+//   int p = b->shape[b_transpose ? 0 : 1];
+
+//   int a_stride0 = a->strides[a_transpose ? 1 : 0], a_stride1 = a->strides[a_transpose ? 0 : 1];
+//   int b_stride0 = b->strides[b_transpose ? 1 : 0], b_stride1 = b->strides[b_transpose ? 0 : 1];
+
+//   auto a_data = a->data;
+//   auto b_data = b->data;
+//   result.resize(m * p);
+
+//   // for (int i = 0; i < m; ++i) {
+//   //   for (int j = 0; j < p; ++j) {
+//   //     float dotProduct = 0;
+//   //     for (int k = 0; k < n; ++k) {
+//   //       float a_val = a_data[i * a_stride0 + k * a_stride1];
+//   //       float b_val = b_data[k * b_stride0 + j * b_stride1];
+//   //       dotProduct += a_val * b_val;
+//   //     }
+//   //     result[i * p + j] = dotProduct;
+//   //   }
+//   // }
+
+//   // #pragma omp parallel for collapse(2) num_threads(2)
+//   for (int i = 0; i < m; ++i) {
+//     for (int j = 0; j < p; ++j) {
+//       float dotProduct = 0;
+//       int k = 0;
+//       int ia = i * a_stride0;
+//       int jb = j * b_stride1;
+//       __m256 sum = _mm256_setzero_ps(); // Initialize sum vector to 0
+
+//       // Use SIMD for the bulk of the operations
+//       for (; k <= n - 8; k += 8) {
+//         // Load elements one by one due to non-contiguous memory
+//         __m256 a_vec = _mm256_set_ps(
+//           a_data[ia + (k+7) * a_stride1],
+//           a_data[ia + (k+6) * a_stride1],
+//           a_data[ia + (k+5) * a_stride1],
+//           a_data[ia + (k+4) * a_stride1],
+//           a_data[ia + (k+3) * a_stride1],
+//           a_data[ia + (k+2) * a_stride1],
+//           a_data[ia + (k+1) * a_stride1],
+//           a_data[ia + k * a_stride1]
+//         );
+
+//         __m256 b_vec = _mm256_set_ps(
+//           b_data[(k+7) * b_stride0 + jb],
+//           b_data[(k+6) * b_stride0 + jb],
+//           b_data[(k+5) * b_stride0 + jb],
+//           b_data[(k+4) * b_stride0 + jb],
+//           b_data[(k+3) * b_stride0 + jb],
+//           b_data[(k+2) * b_stride0 + jb],
+//           b_data[(k+1) * b_stride0 + jb],
+//           b_data[k * b_stride0 + jb]
+//         );
+
+
+//         // __m256 a_vec = _mm256_loadu_ps(&a_data[i * a_stride0 + k * a_stride1]);
+//         // __m256 b_vec = _mm256_loadu_ps(&b_data[k * b_stride0 + j * b_stride1]);
+//         __m256 prod = _mm256_mul_ps(a_vec, b_vec);
+//         sum = _mm256_add_ps(sum, prod);
+//       }
+
+//       // Reduce the sum vector and add to dotProduct
+//       float temp[8];
+//       _mm256_storeu_ps(temp, sum);
+//       for (int x = 0; x < 8; ++x) dotProduct += temp[x];
+
+//       // Handle any remaining elements
+//       for (; k < n; ++k) {
+//         float a_val = a_data[i * a_stride0 + k * a_stride1];
+//         float b_val = b_data[k * b_stride0 + j * b_stride1];
+//         dotProduct += a_val * b_val;
+//       }
+
+//       result[i * p + j] = dotProduct;
+//     }
+//   }
+
+//   return array_from_vector(result, {m, p});
+// }
 
 std::shared_ptr<Array> multiply_transpose(const std::shared_ptr<Array>& a, bool a_transpose, const std::shared_ptr<Array>& b, bool b_transpose) {
   if (a->shape.size() != 2 || b->shape.size() != 2) {
@@ -468,29 +621,28 @@ std::shared_ptr<Array> multiply_transpose(const std::shared_ptr<Array>& a, bool 
   if (a->shape[a_transpose ? 0 : 1] != b->shape[b_transpose ? 1 : 0]) {
     throw std::invalid_argument("Tensor shapes are not compatible for matrix multiplication.");
   }
-  std::vector<float> result;
   int m = a->shape[a_transpose ? 1 : 0];
-  int n = a->shape[a_transpose ? 0 : 1];
-  int p = b->shape[b_transpose ? 0 : 1];
-  int a_stride0 = a->strides[0], a_stride1 = a->strides[1];
-  int b_stride0 = b->strides[0], b_stride1 = b->strides[1];
-  auto a_data = a->data;
-  auto b_data = b->data;
-  result.resize(m * p);
-  for (int i = 0; i < m; ++i) {
-    for (int j = 0; j < p; ++j) {
-      float dotProduct = 0;
-      for (int k = 0; k < n; ++k) {
-        assert((a_transpose ? k * a_stride0 + i * a_stride1 : i * a_stride0 + k * a_stride1) < a_data.size());
-        float a_val = a_transpose ? a_data[k * a_stride0 + i * a_stride1] : a_data[i * a_stride0 + k * a_stride1];
-        assert((b_transpose ? j * b_stride0 + k * b_stride1 : k * b_stride0 + j * b_stride1) < b_data.size());
-        float b_val = b_transpose ? b_data[j * b_stride0 + k * b_stride1] : b_data[k * b_stride0 + j * b_stride1];
-        dotProduct += a_val * b_val;
-      }
-      result[i * p + j] = dotProduct;
-    }
-  }
-  return array_from_vector(result, {m, p});
+  int k = a->shape[a_transpose ? 0 : 1];
+  int n = b->shape[b_transpose ? 0 : 1];
+
+  float alpha = 1.0;
+  float beta = 0.0;
+
+  // A: m x k matrix
+  // B: k x n matrix
+  // C: m x n matrix (result)
+
+  // Leading dimensions
+  int lda = a_transpose ? m : k;
+  int ldb = b_transpose ? k : n;
+  int ldc = n;
+
+  // Perform matrix multiplication: C = alpha*A*B + beta*C
+  std::vector<float> c(m * n);
+  cblas_sgemm(CblasRowMajor, a_transpose ? CblasTrans : CblasNoTrans, b_transpose ? CblasTrans : CblasNoTrans,
+              m, n, k, alpha, a->data.data(), lda, b->data.data(), ldb, beta, c.data(), ldc);
+
+  return array_from_vector(c, {m, n});
 }
 
 std::shared_ptr<Array> operator%(const std::shared_ptr<Array>& a, const std::shared_ptr<Array>& b) {

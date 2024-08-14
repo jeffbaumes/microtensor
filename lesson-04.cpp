@@ -1,6 +1,7 @@
 #include "nn.h"
 #include "tensor.h"
 
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -90,17 +91,8 @@ void mlp() {
     std::make_shared<BatchNorm1d>(vocab_size),
   };
 
-  {
-    NoGrad _;
-    auto final = std::dynamic_pointer_cast<BatchNorm1d>(layers[layers.size() - 1]);
-    final->gamma->data = final->gamma->data * 0.1f;
-    // for (auto& layer : layers) {
-    //   auto linear = std::dynamic_pointer_cast<Linear>(layer);
-    //   if (linear) {
-    //     linear->W->data = linear->W->data * 1.0f;
-    //   }
-    // }
-  }
+  auto final = std::dynamic_pointer_cast<BatchNorm1d>(layers[layers.size() - 1]);
+  final->gamma->data = final->gamma->data * 0.1f;
 
   std::vector<std::shared_ptr<Tensor>> parameters;
   parameters.push_back(C);
@@ -114,6 +106,8 @@ void mlp() {
   });
   std::cout << "Number of parameters: " << num_parameters << std::endl;
 
+  auto start = std::chrono::high_resolution_clock::now();
+
   int iterations = 10000;
   for (int k = 0; k < iterations; k += 1) {
     // Minibatch construct
@@ -123,20 +117,9 @@ void mlp() {
 
     // Forward pass
     auto emb = C->index({Xb});
-
     auto x = emb->view({emb->data->shape[0], -1});
     for (auto& layer : layers) {
-      // if (std::dynamic_pointer_cast<Linear>(layer)) {
-      //   std::cout << "Linear" << std::endl;
-      // } else if (std::dynamic_pointer_cast<BatchNorm1d>(layer)) {
-      //   std::cout << "BatchNorm1d" << std::endl;
-      // } else if (std::dynamic_pointer_cast<Tanh>(layer)) {
-      //   std::cout << "Tanh" << std::endl;
-      // }
       x = (*layer)(x);
-      // std::cout << "x = ";
-      // x->view({-1})->print();
-      // std::cout << std::endl;
     }
     auto loss = cross_entropy(x, Yb);
     if (k % 100 == 0) {
@@ -151,43 +134,85 @@ void mlp() {
 
     // Update
     for (auto& p : parameters) {
+      // p->data = p->data - (k < 5000 ? 0.1f : 0.01f) * p->grad;
       p->data = p->data - 0.1f * p->grad;
     }
   }
 
-  for (int i = 0; i < layers.size(); i += 1) {
-    std::cout << i << ": " << mean(layers[i]->out->data)->data[0] << "," << sqrt(variance(layers[i]->out->data)->data[0]) << std::endl;
+  std::chrono::duration<double> duration = std::chrono::high_resolution_clock::now() - start;
+  std::cout << "Loop execution time: " << duration.count() << " seconds" << std::endl;
+
+  {
+    auto emb = C->index({Xtr});
+    auto x = emb->view({emb->data->shape[0], -1});
+    for (auto& layer : layers) {
+      x = (*layer)(x);
+    }
+    auto loss = cross_entropy(x, Ytr);
+    std::cerr << "train loss: " << loss->data->data[0] << std::endl;
   }
-  for (int i = 0; i < layers.size(); i += 1) {
-    std::cout << i << ": " << mean(layers[i]->out->grad)->data[0] << "," << sqrt(variance(layers[i]->out->grad)->data[0]) << std::endl;
+
+  {
+    auto emb = C->index({Xdev});
+    auto x = emb->view({emb->data->shape[0], -1});
+    for (auto& layer : layers) {
+      x = (*layer)(x);
+    }
+    auto loss = cross_entropy(x, Ydev);
+    std::cerr << "dev loss: " << loss->data->data[0] << std::endl;
   }
 
+  for (auto& layer : layers) {
+    layer->training = false;
+  }
 
-  // {
-  //   NoGrad _;
-  //   std::cout << "data = [";
-  //   for (int i = 0; i < layers.size(); i += 1) {
-  //     // std::cout << mean(tanh->out->data)->data[0] << "," << sqrt(variance(tanh->out->data)->data[0]) << std::endl;
-  //     if (i > 0) {
-  //       std::cout << ",";
-  //     }
-  //     layers[i]->out->data->view({-1})->print();
-  //   }
-  //   std::cout << "]" << std::endl;
+  for (int i = 0; i < 20; i += 1) {
+    std::string out;
+    auto context = std::vector<float>(block_size);
+    while (true) {
+      auto emb = C->index({from_vector(context, {block_size})});
+      auto x = emb->view({1, -1});
+      for (auto& layer : layers) {
+        x = (*layer)(x);
+      }
+      auto logits = x;
+      auto probs = softmax(logits, {1});
+      auto pred = multinomial(probs, engine);
+      auto next = pred->data->data[0];
+      if (next == 0) {
+        break;
+      }
+      context = std::vector<float>(context.begin() + 1, context.end());
+      context.push_back(next);
+      out += itos[next];
+    }
+    std::cout << out << std::endl;
+  }
+}
 
-  //   std::cout << "grad = [";
-  //   for (int i = 0; i < layers.size(); i += 1) {
-  //     // std::cout << mean(tanh->out->grad)->data[0] << "," << sqrt(variance(tanh->out->grad)->data[0]) << std::endl;
-  //     if (i > 0) {
-  //       std::cout << ",";
-  //     }
-  //     layers[i]->out->grad->view({-1})->print();
-  //   }
-  //   std::cout << "]" << std::endl;
-  // }
+void test_index_backprop() {
+  auto engine = std::default_random_engine(std::random_device{}());
+  auto x = randn({10, 10}, engine);
+  auto y = x->index({from_vector({0, 5, 1, 5}, {2, 2}), from_vector({0, 5, 1, 5}, {2, 2})});
+  y->print();
+  auto z = sum(y);
+  z->backward();
+  x->grad->print();
+}
+
+void test_view_backprop() {
+  auto engine = std::default_random_engine(std::random_device{}());
+  auto x = randn({10, 10}, engine);
+  auto y = x->view({5, 20});
+  y->print();
+  auto z = sum(y * y);
+  z->backward();
+  y->grad->print();
+  x->grad->print();
 }
 
 int main() {
+  // test_view_backprop();
   mlp();
   return 0;
 }

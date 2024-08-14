@@ -48,6 +48,10 @@ std::shared_ptr<Tensor> Tensor::operator[](int index) {
 }
 
 std::shared_ptr<Tensor> Tensor::index(const std::vector<std::shared_ptr<Tensor>>& indices) {
+  // assert(indices.size() == data->shape.size());
+  // for (auto& index : indices) {
+  //   assert(index->data->shape.size() == 1);
+  // }
   std::vector<std::shared_ptr<Array>> array_indices;
   for (auto& index : indices) {
     array_indices.push_back(index->data);
@@ -68,17 +72,44 @@ std::shared_ptr<Tensor> Tensor::index(const std::vector<std::shared_ptr<Tensor>>
     if (!result) {
       throw std::runtime_error("one of the tensors is null");
     }
-    for (int i = 0; i < array_indices[0]->shape[0]; ++i) {
-      size_t linearIndex = 0;
-      for (size_t dim = 0; dim < array_indices.size(); ++dim) {
-        assert(i*array_indices[dim]->strides[0] < array_indices[dim]->data.size());
-        assert(dim < grad->strides.size());
-        linearIndex += array_indices[dim]->data[i*array_indices[dim]->strides[0]] * grad->strides[dim];
+    // Iterate over all indices add the gradient of the output to the gradient of the input
+    int index_elements = std::accumulate(array_indices[0]->shape.begin(), array_indices[0]->shape.end(), 1, std::multiplies<int>());
+    int lookup_elements = std::accumulate(data->shape.begin() + array_indices.size(), data->shape.end(), 1, std::multiplies<int>());
+    for (int i = 0; i < index_elements; i += 1) {
+      size_t this_data_index = 0;
+      for (size_t indices_index = 0; indices_index < array_indices.size(); ++indices_index) {
+        auto index = array_indices[indices_index];
+        size_t index_data_index = 0;
+        size_t remainder = i;
+        for (size_t dim = 0; dim < index->shape.size(); ++dim) {
+          size_t dim_index = remainder / std::accumulate(index->shape.begin() + dim + 1, index->shape.end(), 1, std::multiplies<int>());
+          remainder %= std::accumulate(index->shape.begin() + dim + 1, index->shape.end(), 1, std::multiplies<int>());
+          index_data_index += dim_index * index->strides[dim];
+        }
+        this_data_index += index->data[index_data_index] * data->strides[indices_index];
       }
-      assert(linearIndex < grad->data.size());
-      assert(i < result->grad->data.size());
-      grad->data[linearIndex] += result->grad->data[i];
+      for (int j = 0; j < lookup_elements; j += 1) {
+        size_t this_data_offset = 0;
+        size_t remainder = j;
+        for (size_t dim = array_indices.size(); dim < data->shape.size(); ++dim) {
+          size_t dim_index = remainder / data->strides[dim];
+          remainder %= data->strides[dim];
+          this_data_offset += dim_index * data->strides[dim];
+        }
+        grad->data[this_data_index + this_data_offset] += result->grad->data[i*lookup_elements + j];
+      }
     }
+    // for (int i = 0; i < array_indices[0]->shape[0]; ++i) {
+    //   size_t linearIndex = 0;
+    //   for (size_t dim = 0; dim < array_indices.size(); ++dim) {
+    //     assert(i*array_indices[dim]->strides[0] < array_indices[dim]->data.size());
+    //     assert(dim < grad->strides.size());
+    //     linearIndex += array_indices[dim]->data[i*array_indices[dim]->strides[0]] * grad->strides[dim];
+    //   }
+    //   assert(linearIndex < grad->data.size());
+    //   assert(i < result->grad->data.size());
+    //   grad->data[linearIndex] += result->grad->data[i];
+    // }
   };
   return result;
 }
@@ -252,28 +283,37 @@ std::shared_ptr<Tensor> sum(const std::shared_ptr<Tensor>& a, const std::vector<
       throw std::runtime_error("one of the tensors is null");
     }
     broadcast_op(a->grad, result->grad, true, std::plus<float>());
+    // broadcast_add(a->grad, result->grad, true);
   };
   return result;
 }
 
+std::shared_ptr<Tensor> max(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims) {
+  auto result = from_array(max(a->data, dims));
+  // TODO: I'm going to assume no gradient calculation for max, is this right?
+  return result;
+}
+
 std::shared_ptr<Tensor> mean(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims) {
-  if (dims.empty()) {
-    return sum(a) / a->nelement();
+  float n = a->nelement();
+  if (!dims.empty()) {
+    n = 1.0f;
+    for (int i = 0; i < dims.size(); ++i) {
+      n *= a->data->shape[dims[i]];
+    }
   }
-  float divisor = 1.0f;
-  for (int i = 0; i < dims.size(); ++i) {
-    divisor *= a->data->shape[dims[i]];
-  }
-  return sum(a, dims) / divisor;
+  return sum(a, dims) / n;
 }
 
 std::shared_ptr<Tensor> variance(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims) {
-  auto x_mean = mean(a, dims);
-  float divisor = 1.0f;
-  for (int i = 0; i < dims.size(); ++i) {
-    divisor *= a->data->shape[dims[i]];
+  float n = a->nelement();
+  if (!dims.empty()) {
+    n = 1.0f;
+    for (int i = 0; i < dims.size(); ++i) {
+      n *= a->data->shape[dims[i]];
+    }
   }
-  return sum(pow(a - x_mean, 2.0f), dims) / (divisor - 1.0f);
+  return sum(pow(a - mean(a, dims), 2.0f), dims) / (n - 1.0f);
 }
 
 std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
@@ -294,10 +334,17 @@ std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor>& a, const std::s
     }
     // a->grad = a->grad + result->grad * b->data;
     // b->grad = b->grad + result->grad * a->data;
+
     auto b_mult = broadcast_op(result->grad, b->data, false, std::multiplies<float>());
     auto a_mult = broadcast_op(result->grad, a->data, false, std::multiplies<float>());
     broadcast_op(a->grad, b_mult, true, std::plus<float>());
     broadcast_op(b->grad, a_mult, true, std::plus<float>());
+
+    // auto b_mult = broadcast_mult(result->grad, b->data, false);
+    // auto a_mult = broadcast_mult(result->grad, a->data, false);
+    // broadcast_add(a->grad, b_mult, true);
+    // broadcast_add(b->grad, a_mult, true);
+
   };
   return result;
 }
@@ -340,6 +387,9 @@ std::shared_ptr<Tensor> operator+(const std::shared_ptr<Tensor>& a, const std::s
     }
     broadcast_op(a->grad, result->grad, true, std::plus<float>());
     broadcast_op(b->grad, result->grad, true, std::plus<float>());
+
+    // broadcast_add(a->grad, result->grad, true);
+    // broadcast_add(b->grad, result->grad, true);
   };
   return result;
 }
@@ -396,15 +446,15 @@ std::shared_ptr<Tensor> squeeze(const std::shared_ptr<Tensor>& x) {
 }
 
 std::shared_ptr<Tensor> cross_entropy(const std::shared_ptr<Tensor>& logits, const std::shared_ptr<Tensor>& target) {
-  auto counts = exp(logits);
+  auto counts = exp(logits - max(logits));
   auto probs = counts / sum(counts, {1});
   auto loss = -mean(log(probs->index({arange(0, logits->data->shape[0]), target})));
   return loss;
 }
 
-std::shared_ptr<Tensor> softmax(const std::shared_ptr<Tensor>& logits) {
-  auto counts = exp(logits);
-  return counts / sum(counts, {1});
+std::shared_ptr<Tensor> softmax(const std::shared_ptr<Tensor>& logits, const std::vector<int>& dims) {
+  auto counts = exp(logits - max(logits));
+  return counts / sum(counts, dims);
 }
 
 std::shared_ptr<Tensor> zeros(const std::vector<int>& shape) {

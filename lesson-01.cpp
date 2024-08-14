@@ -116,19 +116,19 @@ int main() {
 
       // Backward pass
       for (auto& layer : n.layers) {
-        if (layer.W->grad) {
-          layer.W->grad = nullptr;
-        }
-        if (layer.b->grad) {
-          layer.b->grad = nullptr;
+        for (auto& parameter : layer->parameters) {
+          if (parameter->grad) {
+            parameter->grad = nullptr;
+          }
         }
       }
       loss->backward();
 
       // Update
       for (auto& layer : n.layers) {
-        layer.W->data = layer.W->data - 0.02f * layer.W->grad;
-        layer.b->data = layer.b->data - 0.02f * layer.b->grad;
+        for (auto& parameter : layer->parameters) {
+          parameter->data = parameter->data - 0.02f * parameter->grad;
+        }
       }
 
       std::cout << k << " " << loss->data->data[0] << std::endl;

@@ -16,14 +16,13 @@ BatchNorm1d::BatchNorm1d(int dim, float momentum, float epsilon) : momentum(mome
   parameters.push_back(beta);
   running_mean = zeros({dim});
   running_var = ones({dim});
-  training = true;
 }
 
 std::shared_ptr<Tensor> BatchNorm1d::operator()(const std::shared_ptr<Tensor>& x) {
   std::shared_ptr<Tensor> x_mean, x_var;
   if (training) {
     x_mean = mean(x, {0});
-    x_var = mean(pow(x - x_mean, 2.0f), {0});
+    x_var = variance(x, {0});
   } else {
     x_mean = running_mean;
     x_var = running_var;
@@ -47,7 +46,7 @@ std::shared_ptr<Tensor> Tanh::operator()(const std::shared_ptr<Tensor>& x) {
 std::shared_ptr<Tensor> MLP::operator()(const std::shared_ptr<Tensor>& x) {
   auto outputs = x;
   for (int i = 0; i < layers.size(); ++i) {
-    outputs = layers[i](outputs);
+    outputs = (*layers[i])(outputs);
   }
   return outputs;
 }

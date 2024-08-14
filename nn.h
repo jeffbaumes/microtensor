@@ -9,6 +9,7 @@ class Module {
   virtual std::shared_ptr<Tensor> operator()(const std::shared_ptr<Tensor>& x) = 0;
   std::vector<std::shared_ptr<Tensor>> parameters;
   std::shared_ptr<Tensor> out;
+  bool training = true;
  private:
 };
 
@@ -45,7 +46,6 @@ public:
   std::shared_ptr<Tensor> running_var;
   float momentum;
   float epsilon;
-  bool training;
 };
 
 
@@ -62,13 +62,15 @@ class MLP : public Module {
 
   std::shared_ptr<Tensor> operator()(const std::shared_ptr<Tensor>& x) override;
 
-  std::vector<Linear> layers;
+  std::vector<std::shared_ptr<Module>> layers;
 };
 
 template <typename Engine>
 MLP::MLP(int numInputs, std::vector<int> numOutputs, Engine& engine) {
-  layers = std::vector<Linear>(numOutputs.size(), Linear(numInputs, numOutputs[0], engine));
-  for (int i = 1; i < numOutputs.size(); ++i) {
-    layers[i] = Linear(numOutputs[i - 1], numOutputs[i], engine);
+  layers = std::vector<std::shared_ptr<Module>>(2 * numOutputs.size(), std::make_shared<Linear>(numInputs, numOutputs[0], engine));
+  layers[1] = std::make_shared<Tanh>();
+  for (int i = 1; i < numOutputs.size(); i += 1) {
+    layers[2 * i] = std::make_shared<Linear>(numOutputs[i - 1], numOutputs[i], engine);
+    layers[2 * i + 1] = std::make_shared<Tanh>();
   }
 }
