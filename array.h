@@ -78,3 +78,4 @@ std::shared_ptr<Array> variance(const std::shared_ptr<Array>& a, const std::vect
 std::shared_ptr<Array> multiply_transpose(const std::shared_ptr<Array>& a, bool a_transpose, const std::shared_ptr<Array>& b, bool b_transpose);
 std::shared_ptr<Array> operator%(const std::shared_ptr<Array>& a, const std::shared_ptr<Array>& b);
 std::shared_ptr<Array> squeeze(const std::shared_ptr<Array>& x);
+std::shared_ptr<Array> softmax(const std::shared_ptr<Array>& logits, const std::vector<int>& dims);

@@ -659,3 +659,8 @@ std::shared_ptr<Array> squeeze(const std::shared_ptr<Array>& x) {
   }
   return array_from_vector(x->data, new_shape);
 }
+
+std::shared_ptr<Array> softmax(const std::shared_ptr<Array>& logits, const std::vector<int>& dims) {
+  auto counts = exp(logits - max(logits, dims));
+  return counts / sum(counts, dims);
+}

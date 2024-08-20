@@ -445,15 +445,114 @@ std::shared_ptr<Tensor> squeeze(const std::shared_ptr<Tensor>& x) {
   return from_array(squeeze(x->data));
 }
 
-std::shared_ptr<Tensor> cross_entropy(const std::shared_ptr<Tensor>& logits, const std::shared_ptr<Tensor>& target) {
-  auto counts = exp(logits - max(logits));
+std::shared_ptr<Tensor> cross_entropy_unoptimized(const std::shared_ptr<Tensor>& logits, const std::shared_ptr<Tensor>& target) {
+  auto counts = exp(logits - max(logits, {1}));
   auto probs = counts / sum(counts, {1});
   auto loss = -mean(log(probs->index({arange(0, logits->data->shape[0]), target})));
   return loss;
 }
 
+std::shared_ptr<Tensor> cross_entropy(const std::shared_ptr<Tensor>& logits, const std::shared_ptr<Tensor>& target) {
+  if (logits->data->shape.size() != 2) {
+    throw std::runtime_error("logits must be two-dimensional");
+  }
+  if (target->data->shape.size() != 1) {
+    throw std::runtime_error("target must be one-dimensional");
+  }
+
+  // Expanding this operation for speed
+  // auto counts = exp(logits->data - max(logits->data, {1}));
+  // auto probs = counts / sum(counts, {1});
+  // auto result = from_array(-mean(log(probs->index({array_arange(0, logits->data->shape[0]), target->data}))));
+
+  int n = logits->data->shape[0];
+  int m = logits->data->shape[1];
+  int n_stride = logits->data->strides[0];
+  int m_stride = logits->data->strides[1];
+  auto& logits_data = logits->data->data;
+  auto& target_data = target->data->data;
+  std::vector<float> probs(n*m);
+  int probs_n_stride = m;
+  int probs_m_stride = 1;
+
+  float ysum = 0.0f;
+  for (int i = 0; i < n; ++i) {
+    float mx = std::numeric_limits<float>::lowest();
+    int ind = i*n_stride;
+    for (int j = 0; j < m; ++j, ind += m_stride) {
+      float val = logits_data[ind];
+      if (val > mx) {
+        mx = val;
+      }
+    }
+    float sum = 0.0f;
+    float yval = 0.0f;
+    ind = i*n_stride;
+    int probs_ind = i*probs_n_stride;
+    for (int j = 0; j < m; ++j, ind += m_stride, probs_ind += probs_m_stride) {
+      float val = std::exp(logits_data[ind] - mx);
+      probs[probs_ind] = val;
+      sum += val;
+      if (j == target_data[i]) {
+        yval = val;
+      }
+    }
+    probs_ind = i*probs_n_stride;
+    for (int j = 0; j < m; ++j, probs_ind += probs_m_stride) {
+      probs[probs_ind] /= sum;
+    }
+    ysum += std::log(yval / sum);
+  }
+  auto result = from_vector(std::vector<float>({-ysum / n}), {1});
+
+  if (NO_GRAD) {
+    return result;
+  }
+
+  result->children = {logits};
+  std::weak_ptr<Tensor> logits_weak = logits;
+  std::weak_ptr<Tensor> target_weak = target;
+  std::weak_ptr<Tensor> result_weak = result;
+  result->backprop = [logits_weak, target_weak, result_weak, probs]() {
+    auto logits = logits_weak.lock();
+    auto target = target_weak.lock();
+    auto result = result_weak.lock();
+    if (!logits || !target || !result) {
+      throw std::runtime_error("one of the tensors is null");
+    }
+
+    // Expanding this operation for speed
+    // logits->grad = (softmax(logits->data, {1}) - one_hot(target->data, logits->data->shape[1])) / logits->data->shape[0];
+
+    int n = logits->data->shape[0];
+    float n_inv = 1.0f / n;
+    int m = logits->data->shape[1];
+    int grad_n_stride = logits->grad->strides[0];
+    int grad_m_stride = logits->grad->strides[1];
+    int target_stride = target->data->strides[0];
+    int probs_n_stride = m;
+    int probs_m_stride = 1;
+    auto& logits_grad = logits->grad->data;
+    auto& target_data = target->data->data;
+    float result_grad = result->grad->data[0];
+    for (int i = 0; i < n; ++i) {
+      int grad_ind = i*grad_n_stride;
+      int probs_ind = i*probs_n_stride;
+      int target_val = target_data[i*target_stride];
+      for (int j = 0; j < m; ++j, grad_ind += grad_m_stride, probs_ind += probs_m_stride) {
+        float val = probs[probs_ind];
+        if (j == target_val) {
+          val -= 1.0f;
+        }
+        logits_grad[grad_ind] = val * n_inv * result_grad;
+      }
+    }
+  };
+  return result;
+}
+
 std::shared_ptr<Tensor> softmax(const std::shared_ptr<Tensor>& logits, const std::vector<int>& dims) {
-  auto counts = exp(logits - max(logits));
+  auto counts = exp(logits - max(logits, dims));
   return counts / sum(counts, dims);
 }
 

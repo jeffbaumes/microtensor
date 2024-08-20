@@ -30,20 +30,24 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -mavx")
 # add_compile_options(-fopenmp)
 # set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fopenmp")
 
+set(MKL_LIBS mkl_intel_lp64 mkl_intel_thread mkl_core iomp5 pthread m dl)
+
 add_library(microtensor_lib array.cpp nn.cpp tensor.cpp)
 
 add_executable(lesson-01 lesson-01.cpp)
-target_link_libraries(lesson-01 microtensor_lib mkl_intel_lp64 mkl_intel_thread mkl_core iomp5 pthread m dl)
+target_link_libraries(lesson-01 microtensor_lib ${MKL_LIBS})
 
 add_executable(lesson-02 lesson-02.cpp)
-target_link_libraries(lesson-02 microtensor_lib mkl_intel_lp64 mkl_intel_thread mkl_core iomp5 pthread m dl)
+target_link_libraries(lesson-02 microtensor_lib ${MKL_LIBS})
 
 add_executable(lesson-03 lesson-03.cpp)
-target_link_libraries(lesson-03 microtensor_lib mkl_intel_lp64 mkl_intel_thread mkl_core iomp5 pthread m dl)
+target_link_libraries(lesson-03 microtensor_lib ${MKL_LIBS})
 
 add_executable(lesson-04 lesson-04.cpp)
-target_link_libraries(lesson-04 microtensor_lib mkl_intel_lp64 mkl_intel_thread mkl_core iomp5 pthread m dl)
+target_link_libraries(lesson-04 microtensor_lib ${MKL_LIBS})
 
+add_executable(lesson-05 lesson-05.cpp)
+target_link_libraries(lesson-05 microtensor_lib ${MKL_LIBS})
 
 enable_testing()
 

@@ -74,6 +74,7 @@ std::shared_ptr<Tensor> operator-(const std::shared_ptr<Tensor>& a, float b);
 std::shared_ptr<Tensor> operator-(float a, const std::shared_ptr<Tensor>& b);
 std::shared_ptr<Tensor> operator%(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b);
 std::shared_ptr<Tensor> squeeze(const std::shared_ptr<Tensor>& x);
+std::shared_ptr<Tensor> cross_entropy_unoptimized(const std::shared_ptr<Tensor>& logits, const std::shared_ptr<Tensor>& target);
 std::shared_ptr<Tensor> cross_entropy(const std::shared_ptr<Tensor>& logits, const std::shared_ptr<Tensor>& target);
 std::shared_ptr<Tensor> softmax(const std::shared_ptr<Tensor>& logits, const std::vector<int>& dims);
 
