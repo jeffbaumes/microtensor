@@ -12,6 +12,8 @@ and I suppose I just didn't have the sense to stop.
 
 ## Features and discoveries
 
+No dependencies other than one MKL call I was toying with for efficiency.
+
 As I went along, I discovered this ended up in some ways a reimplementation of the CPU backend of the pytorch ATEN
 library with added back propagation, since I was mostly trying to follow pytorch/numpy API. But I didn't look at the ATEN
 implementation to write this.
