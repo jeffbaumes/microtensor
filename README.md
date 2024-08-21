@@ -1,7 +1,8 @@
 # microtensor
 
 A from-scratch C++ implementation of the functionality of the [Neural Networks: Zero to Hero](https://karpathy.ai/zero-to-hero.html) series by Andrej Karpathy.
-This is an educational codebase, not a serious-use library.
+This is an educational codebase, not a serious-use library. It started with the idea of implementing the [micrograd](https://github.com/karpathy/micrograd) library in C++,
+and I suppose I just didn't have the sense to stop.
 
 * lesson-01.cpp - [The spelled-out intro to neural networks and backpropagation: building micrograd](https://youtu.be/VMj-3S1tku0)
 * lesson-02.cpp - [The spelled-out intro to language modeling: building makemore](https://youtu.be/PaCmpygFfXo)
