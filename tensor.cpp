@@ -316,6 +316,17 @@ std::shared_ptr<Tensor> variance(const std::shared_ptr<Tensor>& a, const std::ve
   return sum(pow(a - mean(a, dims), 2.0f), dims) / (n - 1.0f);
 }
 
+std::shared_ptr<Tensor> variance_biased(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims) {
+  float n = a->nelement();
+  if (!dims.empty()) {
+    n = 1.0f;
+    for (int i = 0; i < dims.size(); ++i) {
+      n *= a->data->shape[dims[i]];
+    }
+  }
+  return sum(pow(a - mean(a, dims), 2.0f), dims) / n;
+}
+
 std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b) {
   auto result = from_array(a->data * b->data);
   if (NO_GRAD) {

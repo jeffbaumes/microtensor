@@ -59,6 +59,7 @@ std::shared_ptr<Tensor> max(const std::shared_ptr<Tensor>& a, const std::vector<
 std::shared_ptr<Tensor> sum(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims = {});
 std::shared_ptr<Tensor> mean(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims = {});
 std::shared_ptr<Tensor> variance(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims = {});
+std::shared_ptr<Tensor> variance_biased(const std::shared_ptr<Tensor>& a, const std::vector<int>& dims = {});
 std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor>& a, const std::shared_ptr<Tensor>& b);
 std::shared_ptr<Tensor> operator*(const std::shared_ptr<Tensor>& a, float b);
 std::shared_ptr<Tensor> operator*(float a, const std::shared_ptr<Tensor>& b);

@@ -81,3 +81,7 @@ cmake --build build && cd build && (ctest || true) && cd ..
 ```
 cmake --build build && ./build/lesson04
 ```
+
+```
+cmake --build build && ./build/nn_test
+```

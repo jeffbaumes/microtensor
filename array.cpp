@@ -523,6 +523,17 @@ std::shared_ptr<Array> variance(const std::shared_ptr<Array>& a, const std::vect
   return sum(pow(a - mean(a, dims), 2.0f), dims) / (n - 1.0f);
 }
 
+std::shared_ptr<Array> variance_biased(const std::shared_ptr<Array>& a, const std::vector<int>& dims) {
+  float n = a->nelement();
+  if (!dims.empty()) {
+    n = 1.0f;
+    for (int i = 0; i < dims.size(); ++i) {
+      n *= a->shape[dims[i]];
+    }
+  }
+  return sum(pow(a - mean(a, dims), 2.0f), dims) / n;
+}
+
 // std::shared_ptr<Array> multiply_transpose(const std::shared_ptr<Array>& a, bool a_transpose, const std::shared_ptr<Array>& b, bool b_transpose) {
 //   if (a->shape.size() != 2 || b->shape.size() != 2) {
 //     throw std::invalid_argument("Matrix multiplication requires two 2D tensors.");

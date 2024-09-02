@@ -75,6 +75,7 @@ std::shared_ptr<Array> max(const std::shared_ptr<Array>& a, const std::vector<in
 std::shared_ptr<Array> sum(const std::shared_ptr<Array>& a, const std::vector<int>& dims = {});
 std::shared_ptr<Array> mean(const std::shared_ptr<Array>& a, const std::vector<int>& dims = {});
 std::shared_ptr<Array> variance(const std::shared_ptr<Array>& a, const std::vector<int>& dims = {});
+std::shared_ptr<Array> variance_biased(const std::shared_ptr<Array>& a, const std::vector<int>& dims = {});
 std::shared_ptr<Array> multiply_transpose(const std::shared_ptr<Array>& a, bool a_transpose, const std::shared_ptr<Array>& b, bool b_transpose);
 std::shared_ptr<Array> operator%(const std::shared_ptr<Array>& a, const std::shared_ptr<Array>& b);
 std::shared_ptr<Array> squeeze(const std::shared_ptr<Array>& x);

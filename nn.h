@@ -35,6 +35,20 @@ Linear::Linear(int fan_in, int fan_out, Engine& engine, bool bias) {
 }
 
 
+class BatchNorm1dUnoptimized : public Module {
+public:
+  BatchNorm1dUnoptimized(int dim, float momentum = 0.1f, float epsilon = 1.0e-5f);
+  std::shared_ptr<Tensor> operator()(const std::shared_ptr<Tensor>& x) override;
+
+  std::shared_ptr<Tensor> gamma;
+  std::shared_ptr<Tensor> beta;
+  std::shared_ptr<Tensor> running_mean;
+  std::shared_ptr<Tensor> running_var;
+  float momentum;
+  float epsilon;
+};
+
+
 class BatchNorm1d : public Module {
 public:
   BatchNorm1d(int dim, float momentum = 0.1f, float epsilon = 1.0e-5f);
