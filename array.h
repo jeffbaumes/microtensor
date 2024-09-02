@@ -42,6 +42,7 @@ class Array : public std::enable_shared_from_this<Array> {
   std::shared_ptr<Array> slice(const std::vector<Slice>& slices);
   std::shared_ptr<Array> index(const std::vector<std::shared_ptr<Array>>& indices);
   void print(const std::string& indent = "");
+  void print_shape();
 };
 
 void calculate_strides(const std::vector<int>& shape, std::vector<int>& strides);

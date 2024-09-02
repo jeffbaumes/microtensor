@@ -22,16 +22,30 @@ print(bn.weight.grad)
 print(bn.bias.grad)
 */
 
-  auto bn = BatchNorm1d(2);
-  auto bn_input = from_vector({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}, {3, 2});
-  auto bn_output = bn(bn_input);
-  auto s = sum(bn_output);
-  s->backward();
-
   float val = 1.2247426510f;
-  EXPECT_EQ(bn_output->data->data, std::vector<float>({-val, -val, 0.0f, 0.0f, val, val}));
-  EXPECT_EQ(bn.beta->grad->data, std::vector<float>({3.0f, 3.0f}));
-  EXPECT_EQ(bn.gamma->grad->data, std::vector<float>({0.0f, 0.0f}));
+  {
+    auto bn = BatchNorm1dUnoptimized(2);
+    auto bn_input = from_vector({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}, {3, 2});
+    auto bn_output = bn(bn_input);
+    auto s = sum(bn_output);
+    s->backward();
+
+    EXPECT_EQ(bn_output->data->data, std::vector<float>({-val, -val, 0.0f, 0.0f, val, val}));
+    EXPECT_EQ(bn.beta->grad->data, std::vector<float>({3.0f, 3.0f}));
+    EXPECT_EQ(bn.gamma->grad->data, std::vector<float>({0.0f, 0.0f}));
+  }
+
+  {
+    auto bn = BatchNorm1d(2);
+    auto bn_input = from_vector({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}, {3, 2});
+    auto bn_output = bn(bn_input);
+    auto s = sum(bn_output);
+    s->backward();
+
+    EXPECT_EQ(bn_output->data->data, std::vector<float>({-val, -val, 0.0f, 0.0f, val, val}));
+    EXPECT_EQ(bn.beta->grad->data, std::vector<float>({3.0f, 3.0f}));
+    EXPECT_EQ(bn.gamma->grad->data, std::vector<float>({0.0f, 0.0f}));
+  }
 }
 
 TEST(NNTest, BatchNorm1dInternals) {

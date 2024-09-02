@@ -87,24 +87,49 @@ std::shared_ptr<Tensor> BatchNorm1d::operator()(const std::shared_ptr<Tensor>& x
     // gamma->grad is "dbngain"
     // beta->data is "bnbias"
     // beta->grad is "dbnbias"
+    // n is "m"
 
     // ```python
     // dbngain = (bnraw * dhpreact).sum(0, keepdim=True)
     // dbnbias = dhpreact.sum(0, keepdim=True)
     // ```
-    gamma->grad = gamma->grad + sum(bnraw * out->grad, {0});
-    beta->grad = beta->grad + sum(out->grad, {0});
-
-    float n = x->data->shape[0];
+    // gamma->grad = gamma->grad sum(out->grad, {0});
 
     // ```python
     //   dhprebn = bngain * bnvar_inv/n * (n * dhpreact - dhpreact.sum(0) - n/(n-1) * bnraw * (dhpreact * bnraw).sum(0))
     // ```
     // Note: the `n/(n-1)` factor is removed because I'm using biased variance as described in the (possibly erroneous?) original paper
     // I'm matching pytorch outputs here.
-    auto dhprebn = gamma->data * bnvar_inv/n * (n * out->grad - sum(out->grad, {0}) - bnraw * sum(out->grad * bnraw, {0}));
 
-    x->grad = x->grad + dhprebn;
+    int m = x->data->shape[0];
+    int n = x->data->shape[1];
+
+    auto& x_grad = x->grad->data;
+    auto& beta_grad = beta->grad->data;
+    auto& gamma_grad = gamma->grad->data;
+    auto& gamma_data = gamma->data->data;
+    auto& out_grad = out->grad->data;
+    auto& bnraw_data = bnraw->data;
+    auto& bnvar_inv_data = bnvar_inv->data;
+
+    for (int j = 0; j < n; ++j) {
+      // Compute the sums
+      float sum1 = 0.0f;
+      float sum2 = 0.0f;
+      for (int i = 0, ind = j; i < m; ++i, ind += n) {
+        sum1 += out_grad[ind];
+        sum2 += out_grad[ind] * bnraw_data[ind];
+      }
+
+      // Compute dhprebn
+      float factor = gamma_data[j] * bnvar_inv_data[j] / m;
+      for (int i = 0, ind = j; i < m; ++i, ind += n) {
+        float val = factor * (m * out_grad[ind] - sum1 - bnraw_data[ind] * sum2);
+        x_grad[ind] += val;
+      }
+      beta_grad[j] += sum1;
+      gamma_grad[j] += sum2;
+    }
   };
 
   return out;

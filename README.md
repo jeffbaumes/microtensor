@@ -76,10 +76,10 @@ cmake --build build
 cmake --build build && cd build && (ctest || true) && cd ..
 ```
 
-## To build and run a lesson
+## To build and run a lesson or test
 
 ```
-cmake --build build && ./build/lesson04
+cmake --build build && ./build/lesson-04
 ```
 
 ```

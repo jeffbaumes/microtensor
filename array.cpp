@@ -183,6 +183,17 @@ void Array::print(const std::string& indent) {
   }
 }
 
+void Array::print_shape() {
+  std::cout << "(";
+  for (int i = 0; i < shape.size(); ++i) {
+    std::cout << shape[i];
+    if (i < shape.size() - 1) {
+      std::cout << ", ";
+    }
+  }
+  std::cout << ")\n";
+}
+
 std::shared_ptr<Array> array_arange(float start, float stop, float step) {
   std::vector<float> data;
   for (float i = start; i < stop; i += step) {
