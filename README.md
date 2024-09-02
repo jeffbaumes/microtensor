@@ -8,7 +8,7 @@ and I suppose I just didn't have the sense to stop.
 * lesson-02.cpp - [The spelled-out intro to language modeling: building makemore](https://youtu.be/PaCmpygFfXo)
 * lesson-03.cpp - [Building makemore Part 2: MLP](https://youtu.be/TCH_1BHY58I)
 * lesson-04.cpp - [Building makemore Part 3: Activations & Gradients, BatchNorm](https://youtu.be/P6sfmUTpUmc)
-* lesson-05.cpp - [Building makemore Part 4: Becoming a Backprop Ninja](https://youtu.be/q8SA3rM6ckI) (in progress)
+* lesson-05.cpp - [Building makemore Part 4: Becoming a Backprop Ninja](https://youtu.be/q8SA3rM6ckI)
 
 ## Features and discoveries
 

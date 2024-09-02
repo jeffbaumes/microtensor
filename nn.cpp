@@ -47,6 +47,15 @@ BatchNorm1d::BatchNorm1d(int dim, float momentum, float epsilon) : momentum(mome
 }
 
 std::shared_ptr<Tensor> BatchNorm1d::operator()(const std::shared_ptr<Tensor>& x) {
+  if (x->data->shape.size() != 2) {
+    throw std::runtime_error("input must be two-dimensional");
+  }
+  if (x->data->strides[1] != 1 || x->data->strides[0] != x->data->shape[1]) {
+    throw std::runtime_error("input must be contiguous");
+  }
+
+  // TODO: optimize forward pass using loops
+
   std::shared_ptr<Array> x_mean, x_var;
   if (training) {
     x_mean = mean(x->data, {0});
