@@ -18,8 +18,8 @@ As I went along, I discovered this ended up in some ways a reimplementation of t
 library with added back propagation, since I was mostly trying to follow pytorch/numpy API. But I didn't look at the ATEN
 implementation to write this.
 
-It utilizes C++ lambdas for backprop similar to the pattern Andrej uses in micrograd library.
-It seems elegant to capture what's needed for backprop in the C++ lambda capture.
+It utilizes C++ lambdas for backprop similar to the pattern Andrej uses in the micrograd library.
+It seems elegant to capture what's needed for backprop in the C++ lambda capture, though I needed to make sure to use `std::weak_ptr` to avoid reference cycles.
 
 Broadcasts of addition and multiplication are supported. It was fun to figure out that a broadcast can work as intended just by
 thinking of the broadcasted dimensions as having a stride of zero, which will end up reusing and accumulating data as desired.
