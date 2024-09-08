@@ -49,6 +49,9 @@ target_link_libraries(lesson-04 microtensor_lib ${MKL_LIBS})
 add_executable(lesson-05 lesson-05.cpp)
 target_link_libraries(lesson-05 microtensor_lib ${MKL_LIBS})
 
+add_executable(lesson-06 lesson-06.cpp)
+target_link_libraries(lesson-06 microtensor_lib ${MKL_LIBS})
+
 enable_testing()
 
 add_executable(

@@ -9,6 +9,14 @@ std::shared_ptr<Tensor> Linear::operator()(const std::shared_ptr<Tensor>& inputs
   return out;
 }
 
+std::shared_ptr<Tensor> Embedding::operator()(const std::shared_ptr<Tensor>& x) {
+  return W->index({x});
+}
+
+std::shared_ptr<Tensor> Flatten::operator()(const std::shared_ptr<Tensor>& x) {
+  return x->view({x->data->shape[0], -1});
+}
+
 BatchNorm1dUnoptimized::BatchNorm1dUnoptimized(int dim, float momentum, float epsilon) : momentum(momentum), epsilon(epsilon) {
   gamma = ones({dim});
   beta = zeros({dim});

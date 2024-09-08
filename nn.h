@@ -34,6 +34,26 @@ Linear::Linear(int fan_in, int fan_out, Engine& engine, bool bias) {
   }
 }
 
+class Embedding : public Module {
+ public:
+  template <typename Engine>
+  Embedding(int num_embeddings, int embedding_dim, Engine& engine);
+
+  virtual std::shared_ptr<Tensor> operator()(const std::shared_ptr<Tensor>& x) override;
+
+  std::shared_ptr<Tensor> W;
+};
+
+template <typename Engine>
+Embedding::Embedding(int num_embeddings, int embedding_dim, Engine& engine) {
+  W = randn({num_embeddings, embedding_dim}, engine);
+  parameters.push_back(W);
+}
+
+class Flatten : public Module {
+ public:
+  virtual std::shared_ptr<Tensor> operator()(const std::shared_ptr<Tensor>& x) override;
+};
 
 class BatchNorm1dUnoptimized : public Module {
 public:
