@@ -55,6 +55,15 @@ class Flatten : public Module {
   virtual std::shared_ptr<Tensor> operator()(const std::shared_ptr<Tensor>& x) override;
 };
 
+class Sequential : public Module {
+ public:
+  Sequential(const std::vector<std::shared_ptr<Module>>& layers);
+
+  virtual std::shared_ptr<Tensor> operator()(const std::shared_ptr<Tensor>& x) override;
+
+  std::vector<std::shared_ptr<Module>> layers;
+};
+
 class BatchNorm1dUnoptimized : public Module {
 public:
   BatchNorm1dUnoptimized(int dim, float momentum = 0.1f, float epsilon = 1.0e-5f);

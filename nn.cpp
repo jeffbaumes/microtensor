@@ -17,6 +17,22 @@ std::shared_ptr<Tensor> Flatten::operator()(const std::shared_ptr<Tensor>& x) {
   return x->view({x->data->shape[0], -1});
 }
 
+Sequential::Sequential(const std::vector<std::shared_ptr<Module>>& layers) : layers(layers) {
+  for (auto& layer : layers) {
+    for (auto& parameter : layer->parameters) {
+      parameters.push_back(parameter);
+    }
+  }
+}
+
+std::shared_ptr<Tensor> Sequential::operator()(const std::shared_ptr<Tensor>& x) {
+  auto outputs = x;
+  for (int i = 0; i < layers.size(); ++i) {
+    outputs = (*layers[i])(outputs);
+  }
+  return outputs;
+}
+
 BatchNorm1dUnoptimized::BatchNorm1dUnoptimized(int dim, float momentum, float epsilon) : momentum(momentum), epsilon(epsilon) {
   gamma = ones({dim});
   beta = zeros({dim});

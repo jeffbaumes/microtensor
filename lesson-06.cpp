@@ -84,25 +84,19 @@ void mlp() {
   auto [Xdev, Ydev] = build_dataset(dev);
   auto [Xte, Yte] = build_dataset(test);
 
-  std::vector<std::shared_ptr<Module>> layers = {
+  auto model = std::make_shared<Sequential>(std::vector<std::shared_ptr<Module>>{
     std::make_shared<Embedding>(vocab_size, embedding_size, engine),
     std::make_shared<Flatten>(),
     std::make_shared<Linear>(embedding_size * block_size, hidden_layer_size, engine, false),
     std::make_shared<BatchNorm1d>(hidden_layer_size),
     std::make_shared<Tanh>(),
     std::make_shared<Linear>(hidden_layer_size, vocab_size, engine, false),
-  };
+  });
 
-  auto final = std::dynamic_pointer_cast<Linear>(layers[layers.size() - 1]);
+  auto final = std::dynamic_pointer_cast<Linear>(model->layers[model->layers.size() - 1]);
   final->W->data = final->W->data * 0.1f;
 
-  std::vector<std::shared_ptr<Tensor>> parameters;
-  for (auto& layer : layers) {
-    for (auto& parameter : layer->parameters) {
-      parameters.push_back(parameter);
-    }
-  }
-  int num_parameters = std::accumulate(parameters.begin(), parameters.end(), 0, [](int nelement, std::shared_ptr<Tensor> x) {
+  int num_parameters = std::accumulate(model->parameters.begin(), model->parameters.end(), 0, [](int nelement, std::shared_ptr<Tensor> x) {
     return nelement + x->nelement();
   });
   std::cout << "Number of parameters: " << num_parameters << std::endl;
@@ -117,23 +111,20 @@ void mlp() {
     auto Yb = Ytr->index({ix});
 
     // Forward pass
-    auto x = Xb;
-    for (auto& layer : layers) {
-      x = (*layer)(x);
-    }
-    auto loss = cross_entropy(x, Yb);
+    auto logits = (*model)(Xb);
+    auto loss = cross_entropy(logits, Yb);
     if (k % 100 == 0) {
       std::cerr << k << ": " << loss->data->data[0] << " " << (static_cast<float>(k) / iterations * 100.0f) << "%" << std::endl;
     }
 
     // Backward pass
-    for (auto& p : parameters) {
+    for (auto& p : model->parameters) {
       p->grad = {};
     }
     loss->backward();
 
     // Update
-    for (auto& p : parameters) {
+    for (auto& p : model->parameters) {
       p->data = p->data - (k < 100000 ? 0.1f : 0.01f) * p->grad;
     }
   }
@@ -142,24 +133,18 @@ void mlp() {
   std::cout << "Loop execution time: " << duration.count() << " seconds" << std::endl;
 
   {
-    auto x = Xtr;
-    for (auto& layer : layers) {
-      x = (*layer)(x);
-    }
-    auto loss = cross_entropy(x, Ytr);
+    auto logits = (*model)(Xtr);
+    auto loss = cross_entropy(logits, Ytr);
     std::cerr << "train loss: " << loss->data->data[0] << std::endl;
   }
 
   {
-    auto x = Xdev;
-    for (auto& layer : layers) {
-      x = (*layer)(x);
-    }
-    auto loss = cross_entropy(x, Ydev);
+    auto logits = (*model)(Xdev);
+    auto loss = cross_entropy(logits, Ydev);
     std::cerr << "dev loss: " << loss->data->data[0] << std::endl;
   }
 
-  for (auto& layer : layers) {
+  for (auto& layer : model->layers) {
     layer->training = false;
   }
 
@@ -167,11 +152,7 @@ void mlp() {
     std::string out;
     auto context = std::vector<float>(block_size);
     while (true) {
-      auto x = from_vector(context, {1, block_size});
-      for (auto& layer : layers) {
-        x = (*layer)(x);
-      }
-      auto logits = x;
+      auto logits = (*model)(from_vector(context, {1, block_size}));
       auto probs = softmax(logits, {1});
       auto pred = multinomial(probs, engine);
       auto next = pred->data->data[0];
