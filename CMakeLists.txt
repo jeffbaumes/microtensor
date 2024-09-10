@@ -55,13 +55,24 @@ target_link_libraries(lesson-06 microtensor_lib ${MKL_LIBS})
 enable_testing()
 
 add_executable(
+  array_test
+  array_test.cpp
+)
+target_link_libraries(
+  array_test
+  microtensor_lib
+  ${MKL_LIBS}
+  GTest::gtest_main
+)
+
+add_executable(
   tensor_test
   tensor_test.cpp
 )
 target_link_libraries(
   tensor_test
   microtensor_lib
-  mkl_intel_lp64 mkl_intel_thread mkl_core iomp5 pthread m dl
+  ${MKL_LIBS}
   GTest::gtest_main
 )
 
@@ -72,10 +83,11 @@ add_executable(
 target_link_libraries(
   nn_test
   microtensor_lib
-  mkl_intel_lp64 mkl_intel_thread mkl_core iomp5 pthread m dl
+  ${MKL_LIBS}
   GTest::gtest_main
 )
 
 include(GoogleTest)
+gtest_discover_tests(array_test)
 gtest_discover_tests(tensor_test)
 gtest_discover_tests(nn_test)

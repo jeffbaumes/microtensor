@@ -10,7 +10,7 @@ void mlp() {
   // TODO:
   // [x] Embedding model
   // [x] Flatten model
-  // [ ] Sequential model
+  // [x] Sequential model
   // [ ] Allow matrix multiplication to have arbitrary initial dimensions
   //   In A % B, A can have shape (m1, m2, ..., n) and B can have shape (n, p1, p2, ...),
   //   and the output will have shape (m1, m2, ..., p1, p2, ...)

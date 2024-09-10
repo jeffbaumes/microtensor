@@ -636,9 +636,36 @@ std::shared_ptr<Array> variance_biased(const std::shared_ptr<Array>& a, const st
 //   return array_from_vector(result, {m, p});
 // }
 
+std::shared_ptr<Array> multiply_transpose_higher_dim(const std::shared_ptr<Array>& a, bool a_transpose, const std::shared_ptr<Array>& b, bool b_transpose) {
+  if (a->shape.size() < 2 || b->shape.size() < 2) {
+    throw std::invalid_argument("Matrix multiplication requires two tensors with dimension at least 2.");
+  }
+  int k = a->shape[a_transpose ? 0 : a->shape.size() - 1];
+  if (k != b->shape[b_transpose ? b->shape.size() - 1 : 0]) {
+    throw std::invalid_argument("Tensor shapes are not compatible for matrix multiplication.");
+  }
+  int m = a->nelement() / k;
+  int n = b->nelement() / k;
+  std::shared_ptr<Array> a_reshaped = a_transpose ? a->view({k, m}) : a->view({m, k});
+  std::shared_ptr<Array> b_reshaped = b_transpose ? b->view({n, k}) : b->view({k, n});
+  auto result_reshaped = multiply_transpose(a_reshaped, a_transpose, b_reshaped, b_transpose);
+  auto result_shape_a = std::vector<int>(a->shape.begin() + (a_transpose ? 1 : 0), a->shape.end() - (a_transpose ? 0 : 1));
+  if (a_transpose) {
+    std::reverse(result_shape_a.begin(), result_shape_a.end());
+  }
+  auto result_shape_b = std::vector<int>(b->shape.begin() + (b_transpose ? 0 : 1), b->shape.end() - (b_transpose ? 1 : 0));
+  if (b_transpose) {
+    std::reverse(result_shape_b.begin(), result_shape_b.end());
+  }
+  std::vector<int> result_shape;
+  result_shape.insert(result_shape.end(), result_shape_a.begin(), result_shape_a.end());
+  result_shape.insert(result_shape.end(), result_shape_b.begin(), result_shape_b.end());
+  return result_reshaped->view(result_shape);
+}
+
 std::shared_ptr<Array> multiply_transpose(const std::shared_ptr<Array>& a, bool a_transpose, const std::shared_ptr<Array>& b, bool b_transpose) {
   if (a->shape.size() != 2 || b->shape.size() != 2) {
-    throw std::invalid_argument("Matrix multiplication requires two 2D tensors.");
+    return multiply_transpose_higher_dim(a, a_transpose, b, b_transpose);
   }
   if (a->shape[a_transpose ? 0 : 1] != b->shape[b_transpose ? 1 : 0]) {
     throw std::invalid_argument("Tensor shapes are not compatible for matrix multiplication.");
