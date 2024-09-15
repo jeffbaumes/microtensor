@@ -9,6 +9,7 @@ and I suppose I just didn't have the sense to stop.
 * lesson-03.cpp - [Building makemore Part 2: MLP](https://youtu.be/TCH_1BHY58I)
 * lesson-04.cpp - [Building makemore Part 3: Activations & Gradients, BatchNorm](https://youtu.be/P6sfmUTpUmc)
 * lesson-05.cpp - [Building makemore Part 4: Becoming a Backprop Ninja](https://youtu.be/q8SA3rM6ckI)
+* lesson-06.cpp - [Building makemore Part 5: Building a WaveNet](https://www.youtube.com/watch?v=t3YJ5hKiMQ0)
 
 ## Features and discoveries
 
@@ -51,6 +52,10 @@ There is a bit of testing with Google Test.
 
 By implementing a hand-rolled cross entropy as described in lesson 5, I got a 20x speedup on the forward pass and a 100x speedup on the backward
 pass, which was very satisfying. Math FTW!
+
+Assuming contiguous data storage simplifies things. Some code paths now make that assumption,
+for example batch normalization and cross entropy optimized code. Maybe I'll go back and make
+paths for non-contiguous storage.
 
 ## To configure
 
