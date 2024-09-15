@@ -55,6 +55,13 @@ class Flatten : public Module {
   virtual std::shared_ptr<Tensor> operator()(const std::shared_ptr<Tensor>& x) override;
 };
 
+class FlattenConsecutive : public Module {
+ public:
+  FlattenConsecutive(int n) : n(n) {};
+  virtual std::shared_ptr<Tensor> operator()(const std::shared_ptr<Tensor>& x) override;
+  int n;
+};
+
 class Sequential : public Module {
  public:
   Sequential(const std::vector<std::shared_ptr<Module>>& layers);

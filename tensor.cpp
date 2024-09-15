@@ -446,8 +446,20 @@ std::shared_ptr<Tensor> operator%(const std::shared_ptr<Tensor>& a, const std::s
     if (!a || !b || !result) {
       throw std::runtime_error("one of the tensors is null");
     }
-    a->grad = a->grad + multiply_transpose(result->grad, false, b->data, true);
-    b->grad = b->grad + multiply_transpose(a->data, true, result->grad, false);
+    // These are the dims that were effectively used for the multiplication.
+    // We're going to put them explicitly in these views for the backprop multiplication.
+    // Otherwise, we may end up with the wrong shapes.
+    // result (m, n) = a (m, k) % b (k, n)
+    int k = a->data->shape[a->data->shape.size() - 1];
+    int m = a->nelement() / k;
+    int n = b->nelement() / k;
+
+    auto a_view = a->data->view({m, k});
+    auto b_view = b->data->view({k, n});
+    auto result_grad_view = result->grad->view({m, n});
+
+    a->grad = a->grad + multiply_transpose(result_grad_view, false, b_view, true)->view(a->data->shape);
+    b->grad = b->grad + multiply_transpose(a_view, true, result_grad_view, false)->view(b->data->shape);
   };
   return result;
 }

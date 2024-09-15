@@ -17,6 +17,16 @@ std::shared_ptr<Tensor> Flatten::operator()(const std::shared_ptr<Tensor>& x) {
   return x->view({x->data->shape[0], -1});
 }
 
+std::shared_ptr<Tensor> FlattenConsecutive::operator()(const std::shared_ptr<Tensor>& x) {
+  int batch1 = x->data->shape[0];
+  int batch2 = x->data->shape[1] / n;
+  int dim = x->data->shape[2] * n;
+  if (batch2 == 1) {
+    return x->view({batch1, dim});
+  }
+  return x->view({batch1, batch2, dim});
+}
+
 Sequential::Sequential(const std::vector<std::shared_ptr<Module>>& layers) : layers(layers) {
   for (auto& layer : layers) {
     for (auto& parameter : layer->parameters) {
@@ -45,8 +55,13 @@ BatchNorm1dUnoptimized::BatchNorm1dUnoptimized(int dim, float momentum, float ep
 std::shared_ptr<Tensor> BatchNorm1dUnoptimized::operator()(const std::shared_ptr<Tensor>& x) {
   std::shared_ptr<Tensor> x_mean, x_var;
   if (training) {
-    x_mean = mean(x, {0});
-    x_var = variance_biased(x, {0});
+    int n = x->data->shape.size() - 1;
+    std::vector<int> dims(n);
+    for (int i = 0; i < n; ++i) {
+      dims[i] = i;
+    }
+    x_mean = mean(x, dims);
+    x_var = variance_biased(x, dims);
   } else {
     x_mean = running_mean;
     x_var = running_var;
@@ -71,19 +86,19 @@ BatchNorm1d::BatchNorm1d(int dim, float momentum, float epsilon) : momentum(mome
 }
 
 std::shared_ptr<Tensor> BatchNorm1d::operator()(const std::shared_ptr<Tensor>& x) {
-  if (x->data->shape.size() != 2) {
-    throw std::runtime_error("input must be two-dimensional");
-  }
-  if (x->data->strides[1] != 1 || x->data->strides[0] != x->data->shape[1]) {
-    throw std::runtime_error("input must be contiguous");
-  }
+  // TODO: check for contiguous memory since it's assumed
 
   // TODO: optimize forward pass using loops
 
   std::shared_ptr<Array> x_mean, x_var;
   if (training) {
-    x_mean = mean(x->data, {0});
-    x_var = variance_biased(x->data, {0});
+    int n = x->data->shape.size() - 1;
+    std::vector<int> dims(n);
+    for (int i = 0; i < n; ++i) {
+      dims[i] = i;
+    }
+    x_mean = mean(x->data, dims);
+    x_var = variance_biased(x->data, dims);
   } else {
     x_mean = running_mean->data;
     x_var = running_var->data;
@@ -134,8 +149,14 @@ std::shared_ptr<Tensor> BatchNorm1d::operator()(const std::shared_ptr<Tensor>& x
     // Note: the `n/(n-1)` factor is removed because I'm using biased variance as described in the (possibly erroneous?) original paper
     // I'm matching pytorch outputs here.
 
-    int m = x->data->shape[0];
-    int n = x->data->shape[1];
+    // To handle more batch dimensions, m is the product of all dimensions except the last one.
+    // It's like we are calling view(-1, n) on the input tensor x.
+    int dimensions = x->data->shape.size();
+    int m = 1;
+    for (int i = 0; i < dimensions - 1; ++i) {
+      m *= x->data->shape[i];
+    }
+    int n = x->data->shape[dimensions - 1];
 
     auto& x_grad = x->grad->data;
     auto& beta_grad = beta->grad->data;

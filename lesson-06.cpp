@@ -6,28 +6,70 @@
 #include <iostream>
 #include <map>
 
-void mlp() {
+void wavenet(bool use_wavenet) {
   // TODO:
   // [x] Embedding model
   // [x] Flatten model
   // [x] Sequential model
-  // [ ] Allow matrix multiplication to have arbitrary initial dimensions
+  // [x] Allow matrix multiplication to have arbitrary initial dimensions
   //   In A % B, A can have shape (m1, m2, ..., n) and B can have shape (n, p1, p2, ...),
   //   and the output will have shape (m1, m2, ..., p1, p2, ...)
-  // [ ] Batchnorm1d needs to be able to work on shapes (m1, m2, ..., n)
+  // [x] Batchnorm1d needs to be able to work on shapes (m1, m2, ..., n)
   //   mean and variance should be computed over all dimensions except the last
-  // [ ] Implement and train wavenet network
+  // [x] Implement and train wavenet network
 
-  // Baseline model: 208 seconds, train loss: 2.113, dev loss: 2.147
+  // Baseline model
+  // Loop execution time: 208 seconds
+  // train loss: 2.113
+  // dev loss: 2.147
   // int block_size = 3;
   // int embedding_size = 10;
   // int hidden_layer_size = 100;
   // int minibatch_size = 32;
 
+  // Higher block size
+  // Loop execution time: 264.321 seconds
+  // train loss: 2.00945
+  // dev loss: 2.08386
+  // int block_size = 8;
+  // int embedding_size = 10;
+  // int hidden_layer_size = 100;
+  // int minibatch_size = 32;
+
+  // Higher hidden layer size
+  // Loop execution time: 497.789 seconds
+  // train loss: 1.92955
+  // dev loss: 2.03081
+  // int block_size = 8;
+  // int embedding_size = 10;
+  // int hidden_layer_size = 200;
+  // int minibatch_size = 32;
+
+  // Wavenet model of equivalent size
+  // Loop execution time: 1147.68 seconds
+  // train loss: 1.92249
+  // dev loss: 2.00222
+  // int block_size = 8;
+  // int embedding_size = 10;
+  // int hidden_layer_size = 68;
+  // int minibatch_size = 32;
+
+  // Larger wavenet model
+  // Loop execution time: 2660.9 seconds
+  // train loss: 1.787
+  // dev loss: 1.99193
+  // int block_size = 8;
+  // int embedding_size = 24;
+  // int hidden_layer_size = 128;
+  // int minibatch_size = 32;
+
+
   // Hyperparameters
-  int block_size = 3;
-  int embedding_size = 10;
-  int hidden_layer_size = 100;
+  int block_size = 8;
+  // int embedding_size = 10;
+  int embedding_size = use_wavenet ? 24 : 10;
+  // int hidden_layer_size = use_wavenet ? 68 : 200;
+  int hidden_layer_size = use_wavenet ? 128 : 200;
   int minibatch_size = 32;
 
   // Read names.txt into a vector of strings
@@ -84,14 +126,39 @@ void mlp() {
   auto [Xdev, Ydev] = build_dataset(dev);
   auto [Xte, Yte] = build_dataset(test);
 
-  auto model = std::make_shared<Sequential>(std::vector<std::shared_ptr<Module>>{
-    std::make_shared<Embedding>(vocab_size, embedding_size, engine),
-    std::make_shared<Flatten>(),
-    std::make_shared<Linear>(embedding_size * block_size, hidden_layer_size, engine, false),
-    std::make_shared<BatchNorm1d>(hidden_layer_size),
-    std::make_shared<Tanh>(),
-    std::make_shared<Linear>(hidden_layer_size, vocab_size, engine, false),
-  });
+  std::shared_ptr<Sequential> model;
+
+  if (use_wavenet) {
+    model = std::make_shared<Sequential>(std::vector<std::shared_ptr<Module>>{
+      std::make_shared<Embedding>(vocab_size, embedding_size, engine),
+
+      std::make_shared<FlattenConsecutive>(2),
+      std::make_shared<Linear>(embedding_size * 2, hidden_layer_size, engine, false),
+      std::make_shared<BatchNorm1d>(hidden_layer_size),
+      std::make_shared<Tanh>(),
+
+      std::make_shared<FlattenConsecutive>(2),
+      std::make_shared<Linear>(hidden_layer_size * 2, hidden_layer_size, engine, false),
+      std::make_shared<BatchNorm1d>(hidden_layer_size),
+      std::make_shared<Tanh>(),
+
+      std::make_shared<FlattenConsecutive>(2),
+      std::make_shared<Linear>(hidden_layer_size * 2, hidden_layer_size, engine, false),
+      std::make_shared<BatchNorm1d>(hidden_layer_size),
+      std::make_shared<Tanh>(),
+
+      std::make_shared<Linear>(hidden_layer_size, vocab_size, engine, false),
+    });
+  } else {
+    model = std::make_shared<Sequential>(std::vector<std::shared_ptr<Module>>{
+      std::make_shared<Embedding>(vocab_size, embedding_size, engine),
+      std::make_shared<Flatten>(),
+      std::make_shared<Linear>(embedding_size * block_size, hidden_layer_size, engine, false),
+      std::make_shared<BatchNorm1d>(hidden_layer_size),
+      std::make_shared<Tanh>(),
+      std::make_shared<Linear>(hidden_layer_size, vocab_size, engine, false),
+    });
+  }
 
   auto final = std::dynamic_pointer_cast<Linear>(model->layers[model->layers.size() - 1]);
   final->W->data = final->W->data * 0.1f;
@@ -168,6 +235,6 @@ void mlp() {
 }
 
 int main() {
-  mlp();
+  wavenet(true);
   return 0;
 }
