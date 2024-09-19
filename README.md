@@ -57,6 +57,13 @@ Assuming contiguous data storage simplifies things. Some code paths now make tha
 for example batch normalization and cross entropy optimized code. Maybe I'll go back and make
 paths for non-contiguous storage.
 
+## Future ideas
+
+I don't really like the whole `no_grad` thing. Since I have a separate `Array` and `Tensor` type, you
+should just be able to work with the `Array` type directly when you aren't wanting to do backpropagation.
+
+Add CUDA support for some things.
+
 ## To configure
 
 ```
